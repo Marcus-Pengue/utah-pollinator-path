@@ -128,6 +128,9 @@ def get_dataset(dataset: str):
 from leaderboard_db import register_leaderboard_routes
 register_leaderboard_routes(app)
 
+from observations_api import register_observation_routes
+register_observation_routes(app)
+
 
 # =============================================================================
 # RUN SERVER
