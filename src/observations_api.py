@@ -5,6 +5,7 @@ Observations API endpoints for Flask.
 from flask import request, jsonify
 import asyncio
 from observations import submit_observation, get_observations, get_my_observations
+from auth import get_user
 
 
 def _run_async(coro):
@@ -16,6 +17,24 @@ def _run_async(coro):
         loop.close()
 
 
+def _get_user_from_request():
+    """Extract user from Authorization header if present."""
+    auth_header = request.headers.get('Authorization')
+    
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None
+    
+    token = auth_header.split(' ')[1]
+    user = _run_async(get_user(token))
+    
+    if user.get('success'):
+        return {
+            'user_id': user['user_id'],
+            'email': user['email'],
+        }
+    return None
+
+
 def register_observation_routes(app):
     """Register observation routes on Flask app."""
     
@@ -25,15 +44,18 @@ def register_observation_routes(app):
         Upload a pollinator observation.
         
         POST /api/observations/upload
+        Header (optional): Authorization: Bearer <token>
+        
         {
             "photo": "<base64 encoded image>",
             "lat": 40.6655,
             "lng": -111.8965,
             "observed_at": "2025-09-15T14:30:00Z",  // optional
-            "observer_name": "John",                 // optional
-            "observer_email": "john@example.com",    // optional
+            "observer_name": "John",                 // optional if authenticated
             "species_guess": "Monarch butterfly"     // optional
         }
+        
+        If authenticated, user_id is automatically attached.
         """
         data = request.get_json()
         
@@ -46,14 +68,28 @@ def register_observation_routes(app):
         if 'lat' not in data or 'lng' not in data:
             return jsonify({"error": "lat and lng required"}), 400
         
+        # Check for authenticated user
+        user = _get_user_from_request()
+        
+        # Use authenticated user info if available
+        if user:
+            observer_name = data.get('observer_name') or user['email'].split('@')[0]
+            observer_email = user['email']
+            user_id = user['user_id']
+        else:
+            observer_name = data.get('observer_name', 'Anonymous')
+            observer_email = data.get('observer_email')
+            user_id = None
+        
         result = _run_async(submit_observation(
             photo_base64=data['photo'],
             lat=data['lat'],
             lng=data['lng'],
             observed_at=data.get('observed_at'),
-            observer_name=data.get('observer_name', 'Anonymous'),
-            observer_email=data.get('observer_email'),
+            observer_name=observer_name,
+            observer_email=observer_email,
             species_guess=data.get('species_guess'),
+            user_id=user_id,
         ))
         
         if result.get('success'):
@@ -85,40 +121,50 @@ def register_observation_routes(app):
     @app.route('/api/observations/mine', methods=['GET'])
     def my_observations():
         """
-        Get observations by email.
+        Get current user's observations.
         
-        GET /api/observations/mine?email=john@example.com
+        GET /api/observations/mine
+        Header: Authorization: Bearer <token>
         """
-        email = request.args.get('email')
+        user = _get_user_from_request()
         
-        if not email:
-            return jsonify({"error": "email parameter required"}), 400
+        if not user:
+            return jsonify({"error": "Authentication required"}), 401
         
-        result = _run_async(get_my_observations(email))
+        result = _run_async(get_observations_by_user(user['user_id']))
         return jsonify(result)
+
+
+async def get_observations_by_user(user_id: str):
+    """Get all observations for a specific user."""
+    import aiohttp
+    import ssl
+    import certifi
     
-    @app.route('/api/observations/stats', methods=['GET'])
-    def observation_stats():
-        """Get observation statistics."""
-        
-        all_obs = _run_async(get_observations(limit=1000))
-        observations = all_obs.get('observations', [])
-        
-        # Count by status
-        statuses = [o.get('status') for o in observations]
-        
-        # Count by city
-        cities = {}
-        for o in observations:
-            city = o.get('city', 'Unknown')
-            cities[city] = cities.get(city, 0) + 1
-        
-        return jsonify({
-            "total": len(observations),
-            "by_status": {
-                "pending": statuses.count("pending"),
-                "uploaded": statuses.count("uploaded"),
-                "confirmed": statuses.count("confirmed"),
-            },
-            "by_city": cities,
-        })
+    SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
+    SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZXhucW1xd2hwY3JsZWtzcmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNzg1OTEsImV4cCI6MjA4MTg1NDU5MX0.glfXIcO8ofdyWUC9nlf9Y-6EzF30BXlxtIY8NXVEORM"
+    
+    url = f"{SUPABASE_URL}/rest/v1/observations?user_id=eq.{user_id}&order=created_at.desc"
+    
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    }
+    
+    ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    connector = aiohttp.TCPConnector(ssl=ssl_ctx)
+    
+    async with aiohttp.ClientSession(connector=connector) as session:
+        async with session.get(url, headers=headers) as resp:
+            observations = await resp.json() if resp.status == 200 else []
+    
+    # Stats
+    sept_count = sum(1 for o in observations if o.get('observed_at', '').find('-09-') != -1)
+    species = set(o.get('species_guess') for o in observations if o.get('species_guess'))
+    
+    return {
+        "total": len(observations),
+        "september_count": sept_count,
+        "species_count": len(species),
+        "observations": observations,
+    }
