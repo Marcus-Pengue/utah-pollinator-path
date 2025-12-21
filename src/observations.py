@@ -74,6 +74,7 @@ async def save_observation(
     observer_email: Optional[str] = None,
     species_guess: Optional[str] = None,
     user_id: Optional[str] = None,
+    observation_type: str = "wildlife",
     city: Optional[str] = None,
     state: str = "Utah",
 ) -> Dict:
@@ -95,6 +96,8 @@ async def save_observation(
         "state": state,
         "status": "pending",
         "user_id": user_id,
+        "observation_type": observation_type,
+        "review_status": "pending_review",
     }
     
     url = f"{SUPABASE_URL}/rest/v1/{TABLE}"
@@ -119,6 +122,7 @@ async def submit_observation(
     observer_email: Optional[str] = None,
     species_guess: Optional[str] = None,
     user_id: Optional[str] = None,
+    observation_type: str = "wildlife",
 ) -> Dict:
     """
     Complete observation submission flow.
@@ -169,6 +173,8 @@ async def submit_observation(
         "photo_url": upload_result["url"],
         "status": "pending",
         "user_id": user_id,
+        "observation_type": observation_type,
+        "review_status": "pending_review",
         "message": "Photo received! We'll notify you when it's identified.",
         "observation": observation,
     }
