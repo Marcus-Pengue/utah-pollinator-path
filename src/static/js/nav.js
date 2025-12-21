@@ -3,7 +3,7 @@ const NAV_ITEMS = [
     { href: "inventory.html", icon: "🌻", label: "Garden", id: "inventory" },
     { href: "questionnaire.html", icon: "📋", label: "Assess", id: "questionnaire" },
     { href: "score.html", icon: "📊", label: "Score", id: "score" },
-    { href: "challenges.html", icon: "⚔️", label: "Challenges", id: "challenges" },
+    { href: "invite.html", icon: "🏘️", label: "Invite", id: "invite" },
 ];
 
 function getCurrentPage() {
