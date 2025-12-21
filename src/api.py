@@ -196,6 +196,223 @@ def property_summary(grid_hash):
 # =============================================================================
 # RUN SERVER
 # =============================================================================
+# =============================================================================
+# MAP / GEOJSON ENDPOINTS
+# =============================================================================
+
+@app.route('/api/map/observations', methods=['GET'])
+def map_observations():
+    """
+    Get all observations as GeoJSON for map display.
+    
+    GET /api/map/observations
+    GET /api/map/observations?status=confirmed
+    GET /api/map/observations?city=Murray
+    """
+    import asyncio
+    from observations import get_observations
+    
+    status = request.args.get('status')
+    city = request.args.get('city')
+    limit = request.args.get('limit', 500, type=int)
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(get_observations(status=status, limit=limit))
+    finally:
+        loop.close()
+    
+    observations = result.get('observations', [])
+    
+    # Filter by city if specified
+    if city:
+        observations = [o for o in observations if o.get('city') == city]
+    
+    # Convert to GeoJSON
+    features = []
+    for obs in observations:
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [obs.get('lng'), obs.get('lat')]
+            },
+            "properties": {
+                "id": obs.get('id'),
+                "grid_hash": obs.get('grid_hash'),
+                "species_guess": obs.get('species_guess'),
+                "confirmed_species": obs.get('inat_confirmed_taxon'),
+                "observer_name": obs.get('observer_name'),
+                "observed_at": obs.get('observed_at'),
+                "photo_url": obs.get('photo_url'),
+                "status": obs.get('status'),
+                "city": obs.get('city'),
+            }
+        })
+    
+    return jsonify({
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "total": len(features),
+            "generated_at": datetime.now().isoformat(),
+        }
+    })
+
+
+@app.route('/api/map/leaderboard', methods=['GET'])
+def map_leaderboard():
+    """
+    Get leaderboard entries as GeoJSON for map display.
+    
+    GET /api/map/leaderboard
+    GET /api/map/leaderboard?city=Murray
+    """
+    import asyncio
+    from database import get_leaderboard
+    
+    city = request.args.get('city')
+    level = 'city' if city else 'state'
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(get_leaderboard(level=level, filter_value=city, limit=100))
+    finally:
+        loop.close()
+    
+    entries = result.get('entries', [])
+    
+    features = []
+    for entry in entries:
+        # Skip if no coordinates
+        if not entry.get('lat') or not entry.get('lng'):
+            continue
+            
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [entry.get('lng'), entry.get('lat')]
+            },
+            "properties": {
+                "grid_hash": entry.get('grid_hash'),
+                "display_name": entry.get('display_name'),
+                "score": entry.get('score'),
+                "grade": entry.get('grade'),
+                "identity_level": entry.get('identity_level'),
+                "city": entry.get('city'),
+                "ward": entry.get('ward'),
+                "rank": entry.get('rank'),
+            }
+        })
+    
+    return jsonify({
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "total": len(features),
+            "level": level,
+            "filter": city,
+        }
+    })
+
+
+@app.route('/api/map/properties', methods=['GET'])
+def map_properties():
+    """
+    Get unique properties (grid hashes) with aggregated data.
+    Combines leaderboard scores + observation counts.
+    
+    GET /api/map/properties
+    """
+    import asyncio
+    from database import get_leaderboard
+    from observations import get_observations
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Get all leaderboard entries
+        lb_result = loop.run_until_complete(get_leaderboard(level='state', limit=500))
+        lb_entries = {e.get('grid_hash'): e for e in lb_result.get('entries', [])}
+        
+        # Get all observations and count by grid_hash
+        obs_result = loop.run_until_complete(get_observations(limit=1000))
+        obs_by_grid = {}
+        for obs in obs_result.get('observations', []):
+            gh = obs.get('grid_hash')
+            if gh not in obs_by_grid:
+                obs_by_grid[gh] = {'count': 0, 'species': set(), 'september': 0}
+            obs_by_grid[gh]['count'] += 1
+            if obs.get('species_guess'):
+                obs_by_grid[gh]['species'].add(obs['species_guess'])
+            # Check if September observation
+            observed_at = obs.get('observed_at', '')
+            if observed_at and '-09-' in observed_at:
+                obs_by_grid[gh]['september'] += 1
+    finally:
+        loop.close()
+    
+    # Merge data
+    all_grids = set(lb_entries.keys()) | set(obs_by_grid.keys())
+    
+    features = []
+    for grid_hash in all_grids:
+        lb = lb_entries.get(grid_hash, {})
+        obs = obs_by_grid.get(grid_hash, {'count': 0, 'species': set(), 'september': 0})
+        
+        # Get coordinates from either source
+        lat = lb.get('lat')
+        lng = lb.get('lng')
+        
+        if not lat or not lng:
+            # Parse from grid_hash: "40.666_-111.897"
+            try:
+                parts = grid_hash.split('_')
+                lat = float(parts[0])
+                lng = float(parts[1])
+            except:
+                continue
+        
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [lng, lat]
+            },
+            "properties": {
+                "grid_hash": grid_hash,
+                "display_name": lb.get('display_name', 'Unknown'),
+                "score": lb.get('score', 0),
+                "grade": lb.get('grade', 'N/A'),
+                "identity_level": lb.get('identity_level', 'seedling'),
+                "city": lb.get('city'),
+                "ward": lb.get('ward'),
+                "observation_count": obs['count'],
+                "species_count": len(obs['species']),
+                "september_count": obs['september'],
+                "has_score": bool(lb),
+                "has_observations": obs['count'] > 0,
+            }
+        })
+    
+    return jsonify({
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "total_properties": len(features),
+            "with_scores": sum(1 for f in features if f['properties']['has_score']),
+            "with_observations": sum(1 for f in features if f['properties']['has_observations']),
+        }
+    })
+
+
+# =============================================================================
+# RUN SERVER
+# =============================================================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
