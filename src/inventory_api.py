@@ -10,6 +10,7 @@ import ssl
 import certifi
 from flask import request, jsonify
 from species_db import PLANTS
+from challenge_hooks import on_plant_added_sync
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZXhucW1xd2hwY3JsZWtzcmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNzg1OTEsImV4cCI6MjA4MTg1NDU5MX0.glfXIcO8ofdyWUC9nlf9Y-6EzF30BXlxtIY8NXVEORM"
@@ -185,10 +186,23 @@ def register_inventory_routes(app):
         if isinstance(result, dict) and 'error' in result:
             return jsonify(result), result.get('status', 500)
         
+        # Auto-contribute to challenges
+        challenge_contributions = []
+        try:
+            plant_info = {
+                "count": record.get('count', 1),
+                "is_milkweed": record.get('is_milkweed', False),
+                "bloom_seasons": record.get('bloom_seasons', []),
+            }
+            challenge_contributions = on_plant_added_sync(user_id, plant_info, token)
+        except Exception as e:
+            print(f"Challenge hook error: {e}")
+        
         return jsonify({
             "success": True,
             "plant": result[0] if result else None,
-            "message": f"Added {data['species']} to your garden"
+            "message": f"Added {data['species']} to your garden",
+            "challenge_contributions": challenge_contributions
         }), 201
     
     @app.route('/api/inventory/<plant_id>', methods=['DELETE'])
