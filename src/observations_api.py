@@ -6,6 +6,8 @@ from flask import request, jsonify
 import asyncio
 from observations import submit_observation, get_observations, get_my_observations
 from auth import get_user
+from challenge_hooks import on_observation_added_sync
+from badge_engine import on_observation_added_check_badges
 
 
 def _run_async(coro):
@@ -93,6 +95,23 @@ def register_observation_routes(app):
         ))
         
         if result.get('success'):
+            # Auto-contribute to challenges & check badges
+            challenge_contributions = []
+            new_badges = []
+            
+            if user_id:
+                try:
+                    challenge_contributions = on_observation_added_sync(user_id, {}, token=request.headers.get('Authorization', '').replace('Bearer ', ''))
+                except Exception as e:
+                    print(f"Challenge hook error: {e}")
+                
+                try:
+                    new_badges = on_observation_added_check_badges(user_id, request.headers.get('Authorization', '').replace('Bearer ', ''))
+                except Exception as e:
+                    print(f"Badge hook error: {e}")
+            
+            result['challenge_contributions'] = challenge_contributions
+            result['new_badges'] = new_badges
             return jsonify(result), 201
         else:
             return jsonify(result), 500
