@@ -12,6 +12,7 @@ import hashlib
 import secrets
 from flask import request, jsonify
 from datetime import datetime
+from connectivity_engine import on_referral_joined_sync
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZXhucW1xd2hwY3JsZWtzcmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNzg1OTEsImV4cCI6MjA4MTg1NDU5MX0.glfXIcO8ofdyWUC9nlf9Y-6EzF30BXlxtIY8NXVEORM"
@@ -220,6 +221,16 @@ def register_referrals_routes(app):
                                 "earned_at": datetime.utcnow().isoformat()
                             }
                         )
+                        # Trigger connectivity update
+                        try:
+                            on_referral_joined_sync(
+                                referral['referrer_id'],
+                                user_id,
+                                token
+                            )
+                        except Exception as e:
+                            print(f"Connectivity hook error: {e}")
+                        
                         return {"referrer_id": referral['referrer_id']}, None
                 
                 return None, "Failed to claim"
