@@ -413,6 +413,196 @@ def map_properties():
 # =============================================================================
 # RUN SERVER
 # =============================================================================
+# =============================================================================
+# UNIFIED USER DASHBOARD
+# =============================================================================
+
+@app.route('/api/dashboard', methods=['GET'])
+def user_dashboard():
+    """
+    Get complete user dashboard - one call, all data.
+    
+    GET /api/dashboard
+    Header: Authorization: Bearer <token>
+    
+    Returns:
+    - Profile info
+    - Property score
+    - Observations
+    - Rankings
+    - Recommendations
+    """
+    import asyncio
+    from auth import get_user, get_profile
+    from database import get_user_rankings
+    from algorithms.internal_scoring import score_internal_observations, get_property_observation_summary
+    
+    # Require auth
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Authentication required"}), 401
+    
+    token = auth_header.split(' ')[1]
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        # Get user
+        user = loop.run_until_complete(get_user(token))
+        if not user.get('success'):
+            return jsonify({"error": "Invalid token"}), 401
+        
+        user_id = user['user_id']
+        email = user['email']
+        
+        # Get profile
+        profile_result = loop.run_until_complete(get_profile(user_id))
+        profile = profile_result.get('profile', {})
+        
+        # Get user's observations
+        from observations_api import get_observations_by_user
+        obs_result = loop.run_until_complete(get_observations_by_user(user_id))
+        
+        # Get property from most recent observation or profile
+        grid_hash = None
+        lat, lng = None, None
+        
+        if obs_result.get('observations'):
+            latest = obs_result['observations'][0]
+            grid_hash = latest.get('grid_hash')
+            lat = latest.get('lat')
+            lng = latest.get('lng')
+        
+        # Get property score if we have location
+        property_score = None
+        property_summary = None
+        if grid_hash and lat and lng:
+            property_score = loop.run_until_complete(
+                score_internal_observations(lat=lat, lng=lng, grid_hash=grid_hash)
+            )
+            property_summary = loop.run_until_complete(
+                get_property_observation_summary(grid_hash)
+            )
+        
+        # Get rankings if user is on leaderboard
+        rankings = None
+        if grid_hash:
+            rankings_result = loop.run_until_complete(get_user_rankings(grid_hash))
+            if not rankings_result.get('error'):
+                rankings = rankings_result.get('rankings')
+        
+        # Build recommendations
+        recommendations = _build_recommendations(
+            profile=profile,
+            property_score=property_score,
+            property_summary=property_summary,
+            obs_result=obs_result,
+        )
+        
+        return jsonify({
+            "user": {
+                "id": user_id,
+                "email": email,
+                "display_name": profile.get('display_name'),
+                "identity_level": profile.get('identity_level', 'seedling'),
+                "city": profile.get('city'),
+                "ward": profile.get('ward'),
+            },
+            "property": {
+                "grid_hash": grid_hash,
+                "lat": lat,
+                "lng": lng,
+                "score": property_score,
+                "summary": property_summary,
+            },
+            "observations": {
+                "total": obs_result.get('total', 0),
+                "september_count": obs_result.get('september_count', 0),
+                "species_count": obs_result.get('species_count', 0),
+                "recent": obs_result.get('observations', [])[:5],
+            },
+            "rankings": rankings,
+            "recommendations": recommendations,
+            "generated_at": datetime.now().isoformat(),
+        })
+    
+    finally:
+        loop.close()
+
+
+def _build_recommendations(profile, property_score, property_summary, obs_result):
+    """Generate personalized recommendations based on user data."""
+    
+    recs = []
+    
+    # No observations yet
+    if obs_result.get('total', 0) == 0:
+        recs.append({
+            "priority": "high",
+            "type": "action",
+            "title": "Document your first pollinator!",
+            "message": "Upload a photo of any pollinator you see in your yard. This starts tracking your habitat.",
+            "action": "Upload Photo",
+        })
+        return recs
+    
+    # No September observations
+    if property_summary and property_summary.get('september_count', 0) == 0:
+        recs.append({
+            "priority": "high",
+            "type": "planting",
+            "title": "September Gap Detected",
+            "message": "Plant late-season bloomers like rabbitbrush, asters, or goldenrod to support monarch migration.",
+            "plants": ["Rabbitbrush", "Asters", "Goldenrod"],
+        })
+    
+    # Low activity score
+    if property_score and property_score.get('activity_score', 0) < 0.5:
+        recs.append({
+            "priority": "medium",
+            "type": "action",
+            "title": "Keep documenting!",
+            "message": f"You have {obs_result.get('total', 0)} observations. More photos = higher score.",
+            "target": "10 observations",
+        })
+    
+    # Low diversity
+    if property_score and property_score.get('diversity_score', 0) < 0.5:
+        recs.append({
+            "priority": "medium",
+            "type": "planting",
+            "title": "Increase plant diversity",
+            "message": "More plant variety attracts more pollinator species. Try adding milkweed for monarchs.",
+            "plants": ["Narrowleaf Milkweed", "Showy Milkweed"],
+        })
+    
+    # Not on leaderboard
+    if not profile.get('total_score'):
+        recs.append({
+            "priority": "low",
+            "type": "social",
+            "title": "Join the leaderboard!",
+            "message": "Score your property to see how you rank against neighbors.",
+            "action": "Score Property",
+        })
+    
+    # Has observations, doing well
+    if obs_result.get('total', 0) >= 5 and property_score and property_score.get('activity_score', 0) >= 0.75:
+        recs.append({
+            "priority": "low",
+            "type": "social",
+            "title": "You're doing great!",
+            "message": "Consider inviting a neighbor to join. Every yard helps connect the corridor.",
+            "action": "Share",
+        })
+    
+    return recs
+
+
+# =============================================================================
+# RUN SERVER
+# =============================================================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
