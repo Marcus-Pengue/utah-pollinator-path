@@ -133,8 +133,10 @@ register_observation_routes(app)
 
 from auth_api import register_auth_routes
 from admin_api import register_admin_routes
+from species_api import register_species_routes
 register_auth_routes(app)
 register_admin_routes(app)
+register_species_routes(app)
 
 
 # =============================================================================
