@@ -136,11 +136,13 @@ from admin_api import register_admin_routes
 from species_api import register_species_routes
 from advisor_api import register_advisor_routes
 from scoring_v2_api import register_scoring_v2_routes
+from inventory_api import register_inventory_routes
 register_auth_routes(app)
 register_admin_routes(app)
 register_species_routes(app)
 register_advisor_routes(app)
 register_scoring_v2_routes(app)
+register_inventory_routes(app)
 
 
 # =============================================================================

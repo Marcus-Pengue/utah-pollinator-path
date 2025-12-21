@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Garden Inventory | Utah Pollinator Path</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .season-tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; margin: 2px; }
+        .spring { background: #d4edda; color: #155724; }
+        .summer { background: #fff3cd; color: #856404; }
+        .fall { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body class="bg-gradient-to-b from-green-50 to-amber-50 min-h-screen">
+    <div class="max-w-lg mx-auto p-4">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-green-800">🌻 My Garden</h1>
+            <p class="text-gray-600">Track what you've planted</p>
+        </div>
+
+        <!-- Score Summary -->
+        <div id="scoreSummary" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-3xl font-bold" id="scoreValue">--</div>
+                    <div class="text-gray-500 text-sm">Garden Score</div>
+                </div>
+                <div class="text-right">
+                    <div id="scoreGrade" class="text-2xl font-bold">--</div>
+                    <div class="text-gray-500 text-sm" id="plantCount">0 plants</div>
+                </div>
+            </div>
+            <!-- Gaps -->
+            <div id="gaps" class="mt-3 text-sm"></div>
+        </div>
+
+        <!-- Add Plant Button -->
+        <button onclick="showAddForm()" id="addBtn" class="w-full bg-green-600 text-white py-3 rounded-xl font-semibold mb-4 hover:bg-green-700">
+            + Add Plant
+        </button>
+
+        <!-- Add Plant Form (hidden by default) -->
+        <div id="addForm" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+            <h3 class="font-semibold mb-3">Add a Plant</h3>
+            
+            <!-- Species Search -->
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Plant Name</label>
+                <input type="text" id="speciesInput" placeholder="Start typing..." 
+                    class="w-full border rounded-lg px-3 py-2" 
+                    oninput="searchSpecies(this.value)">
+                <div id="suggestions" class="border rounded-lg mt-1 hidden max-h-40 overflow-y-auto"></div>
+            </div>
+
+            <!-- Quick Add Buttons -->
+            <div class="mb-3">
+                <div class="text-xs text-gray-500 mb-1">Quick add:</div>
+                <div class="flex flex-wrap gap-1">
+                    <button onclick="quickAdd('Showy Milkweed')" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Milkweed</button>
+                    <button onclick="quickAdd('Rubber Rabbitbrush')" class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Rabbitbrush</button>
+                    <button onclick="quickAdd('Showy Goldenrod')" class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">Goldenrod</button>
+                    <button onclick="quickAdd('Purple Coneflower')" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Coneflower</button>
+                </div>
+            </div>
+
+            <!-- Count -->
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">How many?</label>
+                <div class="flex gap-2">
+                    <button onclick="setCount(1)" class="count-btn px-4 py-2 border rounded-lg" data-count="1">1</button>
+                    <button onclick="setCount(3)" class="count-btn px-4 py-2 border rounded-lg" data-count="3">3</button>
+                    <button onclick="setCount(5)" class="count-btn px-4 py-2 border rounded-lg" data-count="5">5+</button>
+                    <input type="number" id="countInput" value="1" min="1" class="w-16 border rounded-lg px-2 text-center">
+                </div>
+            </div>
+
+            <!-- Bloom Seasons -->
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">When does it bloom?</label>
+                <div class="flex gap-2">
+                    <label class="flex items-center gap-1">
+                        <input type="checkbox" id="bloomSpring" value="spring"> 
+                        <span class="season-tag spring">Spring</span>
+                    </label>
+                    <label class="flex items-center gap-1">
+                        <input type="checkbox" id="bloomSummer" value="summer"> 
+                        <span class="season-tag summer">Summer</span>
+                    </label>
+                    <label class="flex items-center gap-1">
+                        <input type="checkbox" id="bloomFall" value="fall"> 
+                        <span class="season-tag fall">Fall ⭐</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Checkboxes -->
+            <div class="mb-4 space-y-2">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="isNative" checked>
+                    <span class="text-sm">Native to Utah</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" id="isMilkweed">
+                    <span class="text-sm">This is a milkweed 🦋</span>
+                </label>
+            </div>
+
+            <!-- Submit -->
+            <div class="flex gap-2">
+                <button onclick="hideAddForm()" class="flex-1 border py-2 rounded-lg">Cancel</button>
+                <button onclick="submitPlant()" class="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold">Add to Garden</button>
+            </div>
+        </div>
+
+        <!-- Plant List -->
+        <div id="plantList" class="space-y-2">
+            <div class="text-center text-gray-400 py-8">Loading your garden...</div>
+        </div>
+
+        <!-- Suggestions -->
+        <div id="suggestionsSection" class="mt-6 hidden">
+            <h3 class="font-semibold text-gray-700 mb-2">🌱 Suggested Plants</h3>
+            <div id="suggestionsList" class="space-y-2"></div>
+        </div>
+
+        <!-- Nav -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2">
+            <a href="index.html" class="text-gray-400 text-center">
+                <div class="text-xl">🏠</div>
+                <div class="text-xs">Home</div>
+            </a>
+            <a href="snap.html" class="text-gray-400 text-center">
+                <div class="text-xl">📸</div>
+                <div class="text-xs">Snap</div>
+            </a>
+            <a href="inventory.html" class="text-green-600 text-center">
+                <div class="text-xl">🌻</div>
+                <div class="text-xs font-semibold">Garden</div>
+            </a>
+            <a href="leaderboard.html" class="text-gray-400 text-center">
+                <div class="text-xl">🏆</div>
+                <div class="text-xs">Ranks</div>
+            </a>
+        </nav>
+        <div class="h-16"></div>
+    </div>
+
+    <script>
+        const API = '';
+        let token = localStorage.getItem('supabase_token');
+        let gridHash = localStorage.getItem('grid_hash') || '40.666_-111.897';
+        let selectedSpecies = '';
+
+        // Check auth
+        if (!token) {
+            if (confirm('Please sign in to manage your garden. Go to sign in?')) {
+                window.location.href = 'index.html';
+            }
+        }
+
+        // Load inventory on start
+        loadInventory();
+        loadSuggestions();
+
+        async function loadInventory() {
+            try {
+                const res = await fetch(`${API}/api/inventory?grid_hash=${gridHash}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (data.plants && data.plants.length > 0) {
+                    renderPlants(data.plants);
+                    document.getElementById('scoreSummary').classList.remove('hidden');
+                    document.getElementById('plantCount').textContent = `${data.count} plants`;
+                    
+                    // Show gaps
+                    const gaps = [];
+                    if (!data.has_fall_blooms) gaps.push('⚠️ No fall bloomers');
+                    if (!data.has_milkweed) gaps.push('⚠️ No milkweed');
+                    document.getElementById('gaps').innerHTML = gaps.join(' · ') || '✅ Looking good!';
+                    
+                    // Calculate score
+                    calculateScore(data.plants);
+                } else {
+                    document.getElementById('plantList').innerHTML = `
+                        <div class="text-center text-gray-400 py-8">
+                            <div class="text-4xl mb-2">🌱</div>
+                            <div>No plants yet. Add your first!</div>
+                        </div>`;
+                }
+            } catch (e) {
+                console.error(e);
+                document.getElementById('plantList').innerHTML = `<div class="text-red-500 text-center py-4">Error loading plants</div>`;
+            }
+        }
+
+        function renderPlants(plants) {
+            const html = plants.map(p => `
+                <div class="bg-white rounded-lg shadow p-3 flex justify-between items-center">
+                    <div>
+                        <div class="font-medium">${p.species} ${p.is_milkweed ? '🦋' : ''}</div>
+                        <div class="text-sm text-gray-500">
+                            ×${p.count} · 
+                            ${(p.bloom_seasons || []).map(s => `<span class="season-tag ${s}">${s}</span>`).join('')}
+                            ${p.is_native ? '' : '<span class="text-xs text-gray-400">(non-native)</span>'}
+                        </div>
+                    </div>
+                    <button onclick="deletePlant('${p.id}')" class="text-red-400 hover:text-red-600 px-2">✕</button>
+                </div>
+            `).join('');
+            document.getElementById('plantList').innerHTML = html;
+        }
+
+        async function calculateScore(plants) {
+            const payload = {
+                lat: 40.666,
+                lng: -111.897,
+                plants: plants.map(p => ({
+                    species: p.species,
+                    count: p.count,
+                    bloom_seasons: p.bloom_seasons || [],
+                    is_native: p.is_native,
+                    is_milkweed: p.is_milkweed
+                })),
+                flower_coverage_pct: Math.min(plants.reduce((sum, p) => sum + p.count * 2, 0), 50)
+            };
+            
+            try {
+                const res = await fetch(`${API}/api/v2/score`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                document.getElementById('scoreValue').textContent = Math.round(data.score);
+                document.getElementById('scoreGrade').textContent = data.grade;
+                document.getElementById('scoreGrade').className = `text-2xl font-bold ${
+                    data.grade.startsWith('A') ? 'text-green-600' :
+                    data.grade === 'B' ? 'text-blue-600' :
+                    data.grade === 'C' ? 'text-yellow-600' : 'text-red-600'
+                }`;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadSuggestions() {
+            try {
+                const res = await fetch(`${API}/api/inventory/suggestions?grid_hash=${gridHash}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                if (data.critical?.length > 0 || data.recommended?.length > 0) {
+                    document.getElementById('suggestionsSection').classList.remove('hidden');
+                    
+                    let html = '';
+                    data.critical?.forEach(s => {
+                        html += `<div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <div class="font-medium text-red-800">${s.common_name}</div>
+                            <div class="text-sm text-red-600">${s.reason}</div>
+                            <button onclick="quickAdd('${s.common_name}')" class="mt-2 text-sm bg-red-600 text-white px-3 py-1 rounded">+ Add</button>
+                        </div>`;
+                    });
+                    data.recommended?.slice(0, 3).forEach(s => {
+                        html += `<div class="bg-gray-50 border rounded-lg p-3">
+                            <div class="font-medium">${s.common_name}</div>
+                            <div class="text-sm text-gray-500">Monarch value: ${s.monarch_value}/10</div>
+                            <button onclick="quickAdd('${s.common_name}')" class="mt-2 text-sm bg-green-600 text-white px-3 py-1 rounded">+ Add</button>
+                        </div>`;
+                    });
+                    document.getElementById('suggestionsList').innerHTML = html;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function showAddForm() {
+            document.getElementById('addForm').classList.remove('hidden');
+            document.getElementById('addBtn').classList.add('hidden');
+            document.getElementById('speciesInput').focus();
+        }
+
+        function hideAddForm() {
+            document.getElementById('addForm').classList.add('hidden');
+            document.getElementById('addBtn').classList.remove('hidden');
+            resetForm();
+        }
+
+        function resetForm() {
+            document.getElementById('speciesInput').value = '';
+            document.getElementById('countInput').value = 1;
+            document.getElementById('bloomSpring').checked = false;
+            document.getElementById('bloomSummer').checked = false;
+            document.getElementById('bloomFall').checked = false;
+            document.getElementById('isNative').checked = true;
+            document.getElementById('isMilkweed').checked = false;
+            document.getElementById('suggestions').classList.add('hidden');
+            selectedSpecies = '';
+        }
+
+        async function searchSpecies(query) {
+            if (query.length < 2) {
+                document.getElementById('suggestions').classList.add('hidden');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API}/api/species/autocomplete?q=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                
+                if (data.suggestions?.length > 0) {
+                    const html = data.suggestions.map(s => `
+                        <div class="p-2 hover:bg-gray-100 cursor-pointer border-b" onclick="selectSpecies('${s.common_name}', ${JSON.stringify(s).replace(/"/g, '&quot;')})">
+                            <div class="font-medium">${s.common_name}</div>
+                            <div class="text-xs text-gray-500">${s.scientific_name || ''}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('suggestions').innerHTML = html;
+                    document.getElementById('suggestions').classList.remove('hidden');
+                } else {
+                    document.getElementById('suggestions').classList.add('hidden');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function selectSpecies(name, data) {
+            selectedSpecies = name;
+            document.getElementById('speciesInput').value = name;
+            document.getElementById('suggestions').classList.add('hidden');
+            
+            // Auto-fill bloom seasons if known
+            if (data.bloom_seasons) {
+                document.getElementById('bloomSpring').checked = data.bloom_seasons.includes('spring');
+                document.getElementById('bloomSummer').checked = data.bloom_seasons.includes('summer');
+                document.getElementById('bloomFall').checked = data.bloom_seasons.includes('fall');
+            }
+            
+            // Check milkweed
+            if (name.toLowerCase().includes('milkweed')) {
+                document.getElementById('isMilkweed').checked = true;
+            }
+        }
+
+        function quickAdd(species) {
+            document.getElementById('speciesInput').value = species;
+            selectedSpecies = species;
+            showAddForm();
+            
+            // Auto-check milkweed
+            if (species.toLowerCase().includes('milkweed')) {
+                document.getElementById('isMilkweed').checked = true;
+                document.getElementById('bloomSummer').checked = true;
+            }
+            // Auto-check fall for known fall bloomers
+            if (['Rabbitbrush', 'Goldenrod', 'Aster'].some(f => species.includes(f))) {
+                document.getElementById('bloomFall').checked = true;
+            }
+        }
+
+        function setCount(n) {
+            document.getElementById('countInput').value = n;
+            document.querySelectorAll('.count-btn').forEach(btn => {
+                btn.classList.toggle('bg-green-100', btn.dataset.count == n);
+                btn.classList.toggle('border-green-500', btn.dataset.count == n);
+            });
+        }
+
+        async function submitPlant() {
+            const species = document.getElementById('speciesInput').value.trim();
+            if (!species) {
+                alert('Please enter a plant name');
+                return;
+            }
+            
+            const bloomSeasons = [];
+            if (document.getElementById('bloomSpring').checked) bloomSeasons.push('spring');
+            if (document.getElementById('bloomSummer').checked) bloomSeasons.push('summer');
+            if (document.getElementById('bloomFall').checked) bloomSeasons.push('fall');
+            
+            const payload = {
+                grid_hash: gridHash,
+                species: species,
+                count: parseInt(document.getElementById('countInput').value) || 1,
+                bloom_seasons: bloomSeasons,
+                is_native: document.getElementById('isNative').checked,
+                is_milkweed: document.getElementById('isMilkweed').checked
+            };
+            
+            try {
+                const res = await fetch(`${API}/api/inventory`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (res.ok) {
+                    hideAddForm();
+                    loadInventory();
+                    loadSuggestions();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || 'Failed to add plant');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error adding plant');
+            }
+        }
+
+        async function deletePlant(id) {
+            if (!confirm('Remove this plant?')) return;
+            
+            try {
+                await fetch(`${API}/api/inventory/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                loadInventory();
+                loadSuggestions();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    </script>
+</body>
+</html>
