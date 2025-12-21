@@ -138,6 +138,7 @@ from advisor_api import register_advisor_routes
 from scoring_v2_api import register_scoring_v2_routes
 from inventory_api import register_inventory_routes
 from challenges_api import register_challenges_routes
+from badges_api import register_badges_routes
 register_auth_routes(app)
 register_admin_routes(app)
 register_species_routes(app)
@@ -145,6 +146,7 @@ register_advisor_routes(app)
 register_scoring_v2_routes(app)
 register_inventory_routes(app)
 register_challenges_routes(app)
+register_badges_routes(app)
 
 
 # =============================================================================
