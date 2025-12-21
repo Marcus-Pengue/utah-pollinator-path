@@ -142,6 +142,8 @@ from badges_api import register_badges_routes
 from assessments_api import register_assessments_routes
 from referrals_api import register_referrals_routes
 from connectivity_engine import register_connectivity_routes
+from score_engine import register_score_routes
+from scoring_config import register_config_routes
 register_auth_routes(app)
 register_admin_routes(app)
 register_species_routes(app)
@@ -153,6 +155,8 @@ register_badges_routes(app)
 register_assessments_routes(app)
 register_referrals_routes(app)
 register_connectivity_routes(app)
+register_score_routes(app)
+register_config_routes(app)
 
 
 # =============================================================================
