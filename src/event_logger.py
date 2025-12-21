@@ -10,6 +10,7 @@ import asyncio
 import ssl
 import certifi
 from flask import request, jsonify
+from admin_auth import require_admin
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -279,6 +280,7 @@ def register_events_routes(app):
     """Register event logging API routes."""
     
     @app.route('/api/events/recent', methods=['GET'])
+    @require_admin
     def recent_events():
         """Get recent events. TODO: Add admin auth."""
         limit = request.args.get('limit', 100, type=int)
@@ -302,6 +304,7 @@ def register_events_routes(app):
         return jsonify({"period_days": days, "daily": stats})
     
     @app.route('/api/events/user/<user_id>', methods=['GET'])
+    @require_admin
     def user_activity(user_id):
         """Get activity for a specific user. TODO: Add auth."""
         limit = request.args.get('limit', 50, type=int)

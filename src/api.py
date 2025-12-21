@@ -147,6 +147,7 @@ from scoring_config import register_config_routes
 from stats_api import register_stats_routes
 from jobs_engine import register_jobs_routes
 from event_logger import register_events_routes
+from admin_auth import register_admin_routes
 register_auth_routes(app)
 register_admin_routes(app)
 register_species_routes(app)
@@ -163,6 +164,7 @@ register_config_routes(app)
 register_stats_routes(app)
 register_jobs_routes(app)
 register_events_routes(app)
+register_admin_routes(app)
 
 
 # =============================================================================

@@ -9,6 +9,7 @@ import asyncio
 import ssl
 import certifi
 from flask import request, jsonify
+from admin_auth import require_admin
 from datetime import datetime, timedelta
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
@@ -256,6 +257,7 @@ def register_stats_routes(app):
         return jsonify(stats)
     
     @app.route('/api/admin/export', methods=['GET'])
+    @require_admin
     def admin_export():
         """
         Export all system data.

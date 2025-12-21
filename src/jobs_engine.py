@@ -10,6 +10,7 @@ import asyncio
 import ssl
 import certifi
 from flask import request, jsonify
+from admin_auth import require_admin
 from datetime import datetime, timedelta
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
@@ -312,12 +313,14 @@ def register_jobs_routes(app):
     """Register jobs API routes."""
     
     @app.route('/api/jobs/run/<job_name>', methods=['POST'])
+    @require_admin
     def run_single_job(job_name):
         """Run a specific job. TODO: Add admin auth."""
         result = asyncio.run(run_job(job_name))
         return jsonify(result)
     
     @app.route('/api/jobs/run-all', methods=['POST'])
+    @require_admin
     def run_all():
         """Run all scheduled jobs. TODO: Add admin auth."""
         results = asyncio.run(run_all_jobs())
