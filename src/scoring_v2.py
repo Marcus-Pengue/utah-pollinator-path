@@ -75,7 +75,8 @@ class ScoreBreakdown:
     # Main components (sum to 100 before penalty)
     floral_score: float = 0          # 0-35
     nesting_score: float = 0         # 0-30
-    connectivity_score: float = 0    # 0-20
+    connectivity_score: float = 0
+    connectivity_pioneer: float = 0    # 0-20
     management_score: float = 0      # 0-15
     
     # Sub-scores for floral
@@ -258,33 +259,39 @@ def score_nesting_habitat(data: PropertyData) -> Dict[str, float]:
 
 def score_connectivity(data: PropertyData) -> Dict[str, float]:
     """
-    Score connectivity (20 points max, increased from standard 15% for urban).
+    Score connectivity (20 points max).
     
-    Research basis:
-    - Connectivity affects community composition at R²=0.30-0.55
-    - 500m buffer optimal for multi-taxa urban assessment
-    - Urban fragmentation requires higher connectivity weight
+    Pioneer adjustment:
+    - Early adopters get bonus for starting the network
+    - Weight shifts to neighbor count as network grows
     """
     
     scores = {
         "neighbors": 0,
         "green_space": 0,
+        "pioneer_bonus": 0,
         "total": 0,
     }
     
-    # NEIGHBORS IN PROGRAM: 0-10 points
-    # Each participating neighbor strengthens the network
     neighbors = data.neighbors_in_program
-    if neighbors >= 5:
-        scores["neighbors"] = 10
-    elif neighbors >= 3:
-        scores["neighbors"] = 7
-    elif neighbors >= 2:
-        scores["neighbors"] = 5
-    elif neighbors >= 1:
-        scores["neighbors"] = 3
     
-    # GREEN SPACE WITHIN 500m: 0-10 points
+    # PIONEER BONUS: Rewards being first
+    if neighbors == 0:
+        scores["pioneer_bonus"] = 8  # First in area
+        scores["neighbors"] = 0
+    elif neighbors <= 2:
+        scores["pioneer_bonus"] = 4  # Early adopter
+        scores["neighbors"] = neighbors * 2
+    else:
+        scores["pioneer_bonus"] = 0  # Established network
+        if neighbors >= 5:
+            scores["neighbors"] = 10
+        elif neighbors >= 3:
+            scores["neighbors"] = 7
+        else:
+            scores["neighbors"] = 5
+    
+    # GREEN SPACE WITHIN 500m
     green_pct = data.green_space_within_500m
     if green_pct >= 30:
         scores["green_space"] = 10
@@ -294,10 +301,16 @@ def score_connectivity(data: PropertyData) -> Dict[str, float]:
         scores["green_space"] = 5
     elif green_pct >= 5:
         scores["green_space"] = 3
+    else:
+        scores["green_space"] = 2  # Baseline for urban
     
-    scores["total"] = scores["neighbors"] + scores["green_space"]
+    scores["total"] = min(
+        scores["neighbors"] + scores["green_space"] + scores["pioneer_bonus"],
+        20
+    )
     
     return scores
+
 
 
 def score_management(data: PropertyData) -> Dict[str, float]:
