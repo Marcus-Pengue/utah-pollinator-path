@@ -138,6 +138,64 @@ register_auth_routes(app)
 # =============================================================================
 # RUN SERVER
 # =============================================================================
+# INTERNAL OBSERVATIONS SCORING
+# =============================================================================
+
+from algorithms.internal_scoring import score_internal_observations, get_property_observation_summary
+
+@app.route('/api/score/property', methods=['POST'])
+def score_property():
+    """
+    Score a property based on YOUR observations (not public iNaturalist).
+    
+    POST /api/score/property
+    {"lat": 40.6655, "lng": -111.8965}
+    """
+    data = request.get_json()
+    
+    if not data or 'lat' not in data or 'lng' not in data:
+        return jsonify({"error": "lat and lng required"}), 400
+    
+    lat, lng = data['lat'], data['lng']
+    grid_hash = f"{round(lat, 3)}_{round(lng, 3)}"
+    
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(score_internal_observations(
+            lat=lat,
+            lng=lng,
+            grid_hash=grid_hash,
+        ))
+        return jsonify({
+            "grid_hash": grid_hash,
+            "scores": result,
+        })
+    finally:
+        loop.close()
+
+
+@app.route('/api/property/<grid_hash>/summary', methods=['GET'])
+def property_summary(grid_hash):
+    """
+    Get detailed observation summary for a property.
+    
+    GET /api/property/40.666_-111.897/summary
+    """
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(get_property_observation_summary(grid_hash))
+        return jsonify(result)
+    finally:
+        loop.close()
+
+
+# =============================================================================
+# RUN SERVER
+# =============================================================================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
