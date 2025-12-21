@@ -11,6 +11,7 @@ import ssl
 import certifi
 from flask import request, jsonify
 from datetime import datetime
+from badge_engine import on_assessment_completed_check_badges
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZXhucW1xd2hwY3JsZWtzcmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNzg1OTEsImV4cCI6MjA4MTg1NDU5MX0.glfXIcO8ofdyWUC9nlf9Y-6EzF30BXlxtIY8NXVEORM"
