@@ -164,7 +164,6 @@ register_stats_routes(app)
 register_jobs_routes(app)
 register_events_routes(app)
 register_admin_auth_routes(app)
-register_admin_routes(app)
 
 
 # =============================================================================
