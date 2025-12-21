@@ -2,7 +2,7 @@
 
 PROJECT = {
     "name": "Utah Pollinator Path",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "repo": "https://github.com/Marcus-Pengue/utah-pollinator-path",
     "api_live": "https://utah-pollinator-path.onrender.com",
     "supabase": "https://gqexnqmqwhpcrleksrkb.supabase.co",
@@ -12,22 +12,11 @@ FEATURES = {
     "scoring_api":      {"enabled": True,  "status": "live"},
     "leaderboards":     {"enabled": True,  "status": "live"},
     "supabase":         {"enabled": True,  "status": "live"},
-    "photo_proxy":      {"enabled": True,  "status": "live"},  # NEW
-    "user_accounts":    {"enabled": False, "status": "next"},
-    "pledge_wall":      {"enabled": False, "status": "planned"},
+    "photo_proxy":      {"enabled": True,  "status": "live"},
+    "user_accounts":    {"enabled": True,  "status": "live"},  # NEW
+    "pledge_wall":      {"enabled": False, "status": "next"},
     "yard_signs":       {"enabled": False, "status": "planned"},
     "sms_reminders":    {"enabled": False, "status": "planned"},
-}
-
-ENDPOINTS = {
-    "health":             "/health",
-    "score_homeowner":    "/api/score/homeowner",
-    "score_municipal":    "/api/score/municipal",
-    "leaderboard_join":   "/api/leaderboard/join",
-    "leaderboard_state":  "/api/leaderboard/state",
-    "observations_upload":"/api/observations/upload",  # NEW
-    "observations_list":  "/api/observations",         # NEW
-    "observations_stats": "/api/observations/stats",   # NEW
 }
 
 def print_status():
