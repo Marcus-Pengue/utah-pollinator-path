@@ -131,6 +131,9 @@ register_leaderboard_routes(app)
 from observations_api import register_observation_routes
 register_observation_routes(app)
 
+from auth_api import register_auth_routes
+register_auth_routes(app)
+
 
 # =============================================================================
 # RUN SERVER
