@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score My Property | Utah Pollinator Path</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container { max-width: 500px; margin: 0 auto; padding: 20px; }
+        header { display: flex; align-items: center; gap: 12px; padding: 10px 0 20px; }
+        .back-btn {
+            background: rgba(255,255,255,0.1);
+            border: none; color: white;
+            width: 40px; height: 40px;
+            border-radius: 50%; font-size: 1.2em; cursor: pointer;
+        }
+        header h1 { font-size: 1.3em; }
+        
+        .location-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .location-card.getting { border: 2px dashed rgba(255,255,255,0.3); }
+        .location-card.ready { border: 2px solid #90EE90; }
+        .location-label { font-size: 0.85em; opacity: 0.7; margin-bottom: 8px; }
+        .location-value { font-size: 1.1em; }
+        
+        .btn {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            padding: 16px 24px; border-radius: 12px;
+            font-size: 1.1em; font-weight: 600;
+            cursor: pointer; border: none; width: 100%;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #FFD700; color: #1a472a; }
+        
+        .results { margin-top: 20px; }
+        
+        .grade-card {
+            text-align: center;
+            background: rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        .grade-letter {
+            font-size: 5em;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .grade-label { opacity: 0.8; margin-top: 8px; }
+        .grade-A { color: #90EE90; }
+        .grade-B { color: #98D8C8; }
+        .grade-C { color: #FFD700; }
+        .grade-D { color: #FFA07A; }
+        .grade-F { color: #FF6347; }
+        
+        .factors { display: flex; flex-direction: column; gap: 12px; }
+        .factor {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+        .factor-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .factor-name { font-weight: 500; }
+        .factor-score { color: #90EE90; font-weight: 600; }
+        .factor-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .factor-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #FFD700, #90EE90);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .factor-detail { font-size: 0.8em; opacity: 0.7; margin-top: 6px; }
+        
+        .join-section {
+            background: rgba(255,215,0,0.15);
+            border: 2px solid #FFD700;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .join-section h3 { margin-bottom: 8px; }
+        .join-section p { font-size: 0.9em; opacity: 0.8; margin-bottom: 16px; }
+        .join-section input {
+            width: 100%; padding: 12px; border-radius: 8px;
+            border: none; margin-bottom: 12px; font-size: 1em;
+        }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <button class="back-btn" onclick="location.href='index.html'">←</button>
+            <h1>📍 Score My Property</h1>
+        </header>
+        
+        <div id="input-section">
+            <div id="location-card" class="location-card getting">
+                <div class="location-label">📍 Your Location</div>
+                <div class="location-value" id="location-text">Getting location...</div>
+            </div>
+            
+            <button id="score-btn" class="btn btn-primary" disabled onclick="scoreProperty()">
+                🔍 Score This Location
+            </button>
+        </div>
+        
+        <div id="results" class="results hidden">
+            <div class="grade-card">
+                <div id="grade" class="grade-letter">--</div>
+                <div class="grade-label" id="grade-label">Calculating...</div>
+            </div>
+            
+            <div class="factors" id="factors"></div>
+            
+            <div class="join-section">
+                <h3>🏆 Join the Leaderboard</h3>
+                <p>Compete with neighbors to create the best pollinator habitat!</p>
+                <input type="text" id="display-name" placeholder="Your display name">
+                <input type="text" id="ward" placeholder="Your ward (optional)">
+                <button class="btn btn-primary" onclick="joinLeaderboard()">
+                    Join Leaderboard
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API = 'http://localhost:5001';
+        let currentLocation = null;
+        let currentScore = null;
+        
+        // Get location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    currentLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    document.getElementById('location-card').className = 'location-card ready';
+                    document.getElementById('location-text').textContent = 
+                        `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}`;
+                    document.getElementById('score-btn').disabled = false;
+                },
+                () => {
+                    document.getElementById('location-text').textContent = 'Location unavailable';
+                }
+            );
+        }
+        
+        async function scoreProperty() {
+            const btn = document.getElementById('score-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Scoring...';
+            
+            try {
+                const res = await fetch(`${API}/api/score/homeowner`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: currentLocation.lat, lng: currentLocation.lng })
+                });
+                
+                currentScore = await res.json();
+                displayResults(currentScore);
+            } catch (err) {
+                alert('Error: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '🔍 Score This Location';
+            }
+        }
+        
+        function displayResults(data) {
+            document.getElementById('input-section').classList.add('hidden');
+            document.getElementById('results').classList.remove('hidden');
+            
+            // Grade
+            const grade = data.grade || 'N/A';
+            const gradeEl = document.getElementById('grade');
+            gradeEl.textContent = grade;
+            gradeEl.className = 'grade-letter grade-' + grade.charAt(0);
+            
+            document.getElementById('grade-label').textContent = 
+                `${Math.round(data.total_score || 0)}% Pollinator Potential`;
+            
+            // Factors
+            const factorsEl = document.getElementById('factors');
+            factorsEl.innerHTML = '';
+            
+            const factors = data.factors || [];
+            factors.forEach(f => {
+                const pct = Math.round((f.score / f.max_score) * 100);
+                factorsEl.innerHTML += `
+                    <div class="factor">
+                        <div class="factor-header">
+                            <span class="factor-name">${f.name}</span>
+                            <span class="factor-score">${pct}%</span>
+                        </div>
+                        <div class="factor-bar">
+                            <div class="factor-bar-fill" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="factor-detail">${f.details || ''}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        async function joinLeaderboard() {
+            const name = document.getElementById('display-name').value || 'Anonymous Gardener';
+            const ward = document.getElementById('ward').value || null;
+            
+            try {
+                const res = await fetch(`${API}/api/leaderboard/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: currentLocation.lat,
+                        lng: currentLocation.lng,
+                        score: currentScore.total_score,
+                        grade: currentScore.grade,
+                        display_name: name,
+                        ward: ward
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.success) {
+                    alert(`Welcome, ${name}! You're #${data.rankings?.state?.rank || '?'} in Utah!`);
+                    location.href = 'leaderboard.html';
+                }
+            } catch (err) {
+                alert('Error joining: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>

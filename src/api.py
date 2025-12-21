@@ -17,7 +17,7 @@ from sources.sources import create_all_sources
 from algorithms.homeowner import create_homeowner_algorithm
 from algorithms.municipal import create_municipal_algorithm
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
 _engine = None
@@ -603,6 +603,16 @@ def _build_recommendations(profile, property_score, property_summary, obs_result
 # =============================================================================
 # RUN SERVER
 # =============================================================================
+# =============================================================================
+
+@app.route('/')
+def serve_index():
+    return app.send_static_file('index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    return app.send_static_file(path)
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
