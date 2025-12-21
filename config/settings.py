@@ -1,39 +1,33 @@
-"""
-Utah Pollinator Path - Master Configuration
-"""
+"""Utah Pollinator Path - Master Configuration"""
 
 PROJECT = {
     "name": "Utah Pollinator Path",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "repo": "https://github.com/Marcus-Pengue/utah-pollinator-path",
     "api_live": "https://utah-pollinator-path.onrender.com",
-    "api_local": "http://localhost:5001",
     "supabase": "https://gqexnqmqwhpcrleksrkb.supabase.co",
 }
 
 FEATURES = {
     "scoring_api":      {"enabled": True,  "status": "live"},
-    "leaderboards":     {"enabled": True,  "status": "live"},  # NEW
-    "supabase":         {"enabled": True,  "status": "live"},  # NEW
-    "photo_proxy":      {"enabled": False, "status": "next"},
-    "user_accounts":    {"enabled": False, "status": "planned"},
+    "leaderboards":     {"enabled": True,  "status": "live"},
+    "supabase":         {"enabled": True,  "status": "live"},
+    "photo_proxy":      {"enabled": True,  "status": "live"},  # NEW
+    "user_accounts":    {"enabled": False, "status": "next"},
     "pledge_wall":      {"enabled": False, "status": "planned"},
     "yard_signs":       {"enabled": False, "status": "planned"},
     "sms_reminders":    {"enabled": False, "status": "planned"},
 }
 
 ENDPOINTS = {
-    # Scoring
-    "health":           "/health",
-    "score_homeowner":  "/api/score/homeowner",
-    "score_municipal":  "/api/score/municipal",
-    
-    # Leaderboards (NEW)
-    "leaderboard_join": "/api/leaderboard/join",
-    "leaderboard_state":"/api/leaderboard/state",
-    "leaderboard_city": "/api/leaderboard/city?filter=CITY",
-    "leaderboard_ward": "/api/leaderboard/ward?filter=WARD",
-    "geocode":          "/api/geocode",
+    "health":             "/health",
+    "score_homeowner":    "/api/score/homeowner",
+    "score_municipal":    "/api/score/municipal",
+    "leaderboard_join":   "/api/leaderboard/join",
+    "leaderboard_state":  "/api/leaderboard/state",
+    "observations_upload":"/api/observations/upload",  # NEW
+    "observations_list":  "/api/observations",         # NEW
+    "observations_stats": "/api/observations/stats",   # NEW
 }
 
 def print_status():
