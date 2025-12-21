@@ -10,6 +10,7 @@ import asyncio
 import ssl
 import certifi
 from datetime import datetime
+from event_logger import log_badge_earned
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZXhucW1xd2hwY3JsZWtzcmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNzg1OTEsImV4cCI6MjA4MTg1NDU5MX0.glfXIcO8ofdyWUC9nlf9Y-6EzF30BXlxtIY8NXVEORM"
@@ -230,6 +231,10 @@ async def check_and_award_badges(user_id, trigger, token):
             if badge_info['condition'](stats):
                 if await award_badge(user_id, badge_key, token):
                     newly_awarded.append(badge_key)
+                    try:
+                        log_badge_earned(user_id, badge_key, badge_key)
+                    except:
+                        pass
         except Exception as e:
             print(f"Badge check error for {badge_key}: {e}")
     

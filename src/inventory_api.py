@@ -13,6 +13,7 @@ from species_db import PLANTS
 from challenge_hooks import on_plant_added_sync
 from badge_engine import on_plant_added_check_badges
 from score_engine import recalculate_score_sync
+from event_logger import log_plant_added
 
 SUPABASE_URL = "https://gqexnqmqwhpcrleksrkb.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdxZXhucW1xd2hwY3JsZWtzcmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNzg1OTEsImV4cCI6MjA4MTg1NDU5MX0.glfXIcO8ofdyWUC9nlf9Y-6EzF30BXlxtIY8NXVEORM"
