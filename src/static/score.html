@@ -3,251 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Score My Property | Utah Pollinator Path</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%);
-            min-height: 100vh;
-            color: white;
-        }
-        .container { max-width: 500px; margin: 0 auto; padding: 20px; }
-        header { display: flex; align-items: center; gap: 12px; padding: 10px 0 20px; }
-        .back-btn {
-            background: rgba(255,255,255,0.1);
-            border: none; color: white;
-            width: 40px; height: 40px;
-            border-radius: 50%; font-size: 1.2em; cursor: pointer;
-        }
-        header h1 { font-size: 1.3em; }
-        
-        .location-card {
-            background: rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .location-card.getting { border: 2px dashed rgba(255,255,255,0.3); }
-        .location-card.ready { border: 2px solid #90EE90; }
-        .location-label { font-size: 0.85em; opacity: 0.7; margin-bottom: 8px; }
-        .location-value { font-size: 1.1em; }
-        
-        .btn {
-            display: flex; align-items: center; justify-content: center; gap: 10px;
-            padding: 16px 24px; border-radius: 12px;
-            font-size: 1.1em; font-weight: 600;
-            cursor: pointer; border: none; width: 100%;
-            transition: transform 0.2s, opacity 0.2s;
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-primary { background: #FFD700; color: #1a472a; }
-        
-        .results { margin-top: 20px; }
-        
-        .grade-card {
-            text-align: center;
-            background: rgba(255,255,255,0.15);
-            border-radius: 16px;
-            padding: 30px;
-            margin-bottom: 20px;
-        }
-        .grade-letter {
-            font-size: 5em;
-            font-weight: bold;
-            line-height: 1;
-        }
-        .grade-label { opacity: 0.8; margin-top: 8px; }
-        .grade-A { color: #90EE90; }
-        .grade-B { color: #98D8C8; }
-        .grade-C { color: #FFD700; }
-        .grade-D { color: #FFA07A; }
-        .grade-F { color: #FF6347; }
-        
-        .factors { display: flex; flex-direction: column; gap: 12px; }
-        .factor {
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            padding: 14px 16px;
-        }
-        .factor-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
-        .factor-name { font-weight: 500; }
-        .factor-score { color: #90EE90; font-weight: 600; }
-        .factor-bar {
-            height: 6px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        .factor-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #FFD700, #90EE90);
-            border-radius: 3px;
-            transition: width 0.5s ease;
-        }
-        .factor-detail { font-size: 0.8em; opacity: 0.7; margin-top: 6px; }
-        
-        .join-section {
-            background: rgba(255,215,0,0.15);
-            border: 2px solid #FFD700;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-            text-align: center;
-        }
-        .join-section h3 { margin-bottom: 8px; }
-        .join-section p { font-size: 0.9em; opacity: 0.8; margin-bottom: 16px; }
-        .join-section input {
-            width: 100%; padding: 12px; border-radius: 8px;
-            border: none; margin-bottom: 12px; font-size: 1em;
-        }
-        
-        .hidden { display: none !important; }
-    </style>
+    <title>My Score | Utah Pollinator Path</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <button class="back-btn" onclick="location.href='index.html'">←</button>
-            <h1>📍 Score My Property</h1>
-        </header>
-        
-        <div id="input-section">
-            <div id="location-card" class="location-card getting">
-                <div class="location-label">📍 Your Location</div>
-                <div class="location-value" id="location-text">Getting location...</div>
-            </div>
-            
-            <button id="score-btn" class="btn btn-primary" disabled onclick="scoreProperty()">
-                🔍 Score This Location
-            </button>
+<body class="bg-gradient-to-b from-green-50 to-amber-50 min-h-screen">
+    <div class="max-w-lg mx-auto p-4">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-green-800">📊 Garden Score</h1>
+            <p class="text-gray-600">Evidence-based habitat assessment</p>
         </div>
-        
-        <div id="results" class="results hidden">
-            <div class="grade-card">
-                <div id="grade" class="grade-letter">--</div>
-                <div class="grade-label" id="grade-label">Calculating...</div>
+
+        <!-- Main Score -->
+        <div id="scoreCard" class="bg-white rounded-xl shadow-lg p-6 mb-4">
+            <div class="text-center">
+                <div class="text-6xl font-bold mb-2" id="mainScore">--</div>
+                <div class="text-2xl font-bold mb-1" id="grade">--</div>
+                <div class="text-sm text-gray-500" id="confidence">Loading...</div>
             </div>
+        </div>
+
+        <!-- Score Breakdown -->
+        <div id="breakdown" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+            <h3 class="font-semibold mb-3">Score Breakdown</h3>
             
-            <div class="factors" id="factors"></div>
-            
-            <div class="join-section">
-                <h3>🏆 Join the Leaderboard</h3>
-                <p>Compete with neighbors to create the best pollinator habitat!</p>
-                <input type="text" id="display-name" placeholder="Your display name">
-                <input type="text" id="ward" placeholder="Your ward (optional)">
-                <button class="btn btn-primary" onclick="joinLeaderboard()">
-                    Join Leaderboard
-                </button>
+            <div class="space-y-3">
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>🌸 Floral Resources</span>
+                        <span id="floralScore">0/35</span>
+                    </div>
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div id="floralBar" class="bg-pink-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>🏠 Nesting Habitat</span>
+                        <span id="nestingScore">0/30</span>
+                    </div>
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div id="nestingBar" class="bg-amber-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>🔗 Connectivity</span>
+                        <span id="connectivityScore">0/20</span>
+                    </div>
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div id="connectivityBar" class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>🌿 Management</span>
+                        <span id="managementScore">0/15</span>
+                    </div>
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div id="managementBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div id="penaltyRow" class="hidden">
+                    <div class="flex justify-between text-sm text-red-600">
+                        <span>⚠️ Impervious Penalty</span>
+                        <span id="penaltyScore">0</span>
+                    </div>
+                </div>
             </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div id="recommendations" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+            <h3 class="font-semibold mb-3">🎯 Top Actions</h3>
+            <div id="recList" class="space-y-2"></div>
+        </div>
+
+        <!-- Plant Summary -->
+        <div id="plantSummary" class="bg-white rounded-xl shadow p-4 mb-4 hidden">
+            <h3 class="font-semibold mb-2">Your Plants</h3>
+            <div class="flex gap-4 text-sm">
+                <div><span class="font-bold" id="plantCount">0</span> plants</div>
+                <div><span class="font-bold" id="speciesCount">0</span> species</div>
+                <div id="fallStatus" class="text-red-600">No fall blooms</div>
+                <div id="milkweedStatus" class="text-red-600">No milkweed</div>
+            </div>
+            <a href="inventory.html" class="text-green-600 text-sm mt-2 inline-block">+ Add more plants →</a>
+        </div>
+
+        <!-- Methodology -->
+        <details class="bg-gray-100 rounded-xl p-4 mb-4">
+            <summary class="font-semibold cursor-pointer">📚 How is this calculated?</summary>
+            <div class="mt-3 text-sm text-gray-600 space-y-2">
+                <p><strong>Research-validated scoring</strong> based on:</p>
+                <ul class="list-disc list-inside space-y-1">
+                    <li>ESTIMAP-Pollination model (R²=0.80)</li>
+                    <li>InVEST Pollination Model (R²=0.65-0.80)</li>
+                    <li>Berlin impervious surface study (R²=0.84)</li>
+                </ul>
+                <p class="mt-2"><strong>September weight:</strong> Fall blooms get 1.5-2× weight due to 84.5% nectar deficit during monarch migration.</p>
+                <p><strong>Pioneer bonus:</strong> First adopters in a neighborhood get connectivity credit for starting the network.</p>
+            </div>
+        </details>
+
+        <!-- Not signed in -->
+        <div id="signInPrompt" class="bg-amber-50 border border-amber-200 rounded-xl p-4 hidden">
+            <p class="text-amber-800">Sign in to see your personalized score based on your garden inventory.</p>
+            <a href="index.html" class="text-amber-600 font-semibold">Sign in →</a>
         </div>
     </div>
-    
+
+    <script src="js/nav.js"></script>
     <script>
-        const API = 'http://localhost:5001';
-        let currentLocation = null;
-        let currentScore = null;
-        
-        // Get location
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    currentLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                    document.getElementById('location-card').className = 'location-card ready';
-                    document.getElementById('location-text').textContent = 
-                        `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}`;
-                    document.getElementById('score-btn').disabled = false;
-                },
-                () => {
-                    document.getElementById('location-text').textContent = 'Location unavailable';
-                }
-            );
+        const API = '';
+        let token = localStorage.getItem('supabase_token');
+        let gridHash = localStorage.getItem('grid_hash') || '40.666_-111.897';
+
+        if (token) {
+            loadScore();
+        } else {
+            document.getElementById('signInPrompt').classList.remove('hidden');
+            document.getElementById('mainScore').textContent = '?';
+            document.getElementById('grade').textContent = 'Sign in';
+            document.getElementById('confidence').textContent = 'to see your score';
         }
-        
-        async function scoreProperty() {
-            const btn = document.getElementById('score-btn');
-            btn.disabled = true;
-            btn.innerHTML = '⏳ Scoring...';
-            
+
+        async function loadScore() {
             try {
-                const res = await fetch(`${API}/api/score/homeowner`, {
+                // 1. Fetch user's inventory
+                const invRes = await fetch(`${API}/api/inventory?grid_hash=${gridHash}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const invData = await invRes.json();
+                
+                // Show plant summary
+                if (invData.plants) {
+                    document.getElementById('plantSummary').classList.remove('hidden');
+                    document.getElementById('plantCount').textContent = invData.plants.reduce((sum, p) => sum + (p.count || 1), 0);
+                    document.getElementById('speciesCount').textContent = invData.plants.length;
+                    
+                    if (invData.has_fall_blooms) {
+                        document.getElementById('fallStatus').textContent = '✓ Fall blooms';
+                        document.getElementById('fallStatus').className = 'text-green-600';
+                    }
+                    if (invData.has_milkweed) {
+                        document.getElementById('milkweedStatus').textContent = '✓ Milkweed';
+                        document.getElementById('milkweedStatus').className = 'text-green-600';
+                    }
+                }
+                
+                // 2. Build score request from inventory
+                const plants = (invData.plants || []).map(p => ({
+                    species: p.species,
+                    count: p.count || 1,
+                    bloom_seasons: p.bloom_seasons || [],
+                    is_native: p.is_native !== false,
+                    is_milkweed: p.is_milkweed || false
+                }));
+                
+                const totalPlants = plants.reduce((sum, p) => sum + p.count, 0);
+                const coverageEstimate = Math.min(totalPlants * 2, 50); // Rough estimate
+                
+                const scorePayload = {
+                    lat: parseFloat(gridHash.split('_')[0]) || 40.666,
+                    lng: parseFloat(gridHash.split('_')[1]) || -111.897,
+                    plants: plants,
+                    flower_coverage_pct: coverageEstimate,
+                    neighbors_in_program: 0, // Could fetch from challenges
+                };
+                
+                // 3. Calculate score
+                const scoreRes = await fetch(`${API}/api/v2/score`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat: currentLocation.lat, lng: currentLocation.lng })
+                    body: JSON.stringify(scorePayload)
                 });
+                const scoreData = await scoreRes.json();
                 
-                currentScore = await res.json();
-                displayResults(currentScore);
-            } catch (err) {
-                alert('Error: ' + err.message);
-                btn.disabled = false;
-                btn.innerHTML = '🔍 Score This Location';
+                // 4. Display results
+                displayScore(scoreData);
+                
+            } catch (e) {
+                console.error(e);
+                document.getElementById('confidence').textContent = 'Error loading score';
             }
         }
-        
-        function displayResults(data) {
-            document.getElementById('input-section').classList.add('hidden');
-            document.getElementById('results').classList.remove('hidden');
+
+        function displayScore(data) {
+            // Main score
+            document.getElementById('mainScore').textContent = Math.round(data.score);
+            document.getElementById('grade').textContent = data.grade;
+            document.getElementById('grade').className = `text-2xl font-bold ${getGradeColor(data.grade)}`;
+            document.getElementById('confidence').textContent = `${data.confidence} confidence · ${Math.round(data.data_completeness)}% data`;
             
-            // Grade
-            const grade = data.grade || 'N/A';
-            const gradeEl = document.getElementById('grade');
-            gradeEl.textContent = grade;
-            gradeEl.className = 'grade-letter grade-' + grade.charAt(0);
+            // Breakdown
+            document.getElementById('breakdown').classList.remove('hidden');
+            const b = data.breakdown;
             
-            document.getElementById('grade-label').textContent = 
-                `${Math.round(data.total_score || 0)}% Pollinator Potential`;
+            setScoreBar('floral', b.floral.total, b.floral.max);
+            setScoreBar('nesting', b.nesting.total, b.nesting.max);
+            setScoreBar('connectivity', b.connectivity.total, b.connectivity.max);
+            setScoreBar('management', b.management.total, b.management.max);
             
-            // Factors
-            const factorsEl = document.getElementById('factors');
-            factorsEl.innerHTML = '';
+            if (b.impervious_penalty && b.impervious_penalty < 0) {
+                document.getElementById('penaltyRow').classList.remove('hidden');
+                document.getElementById('penaltyScore').textContent = b.impervious_penalty.toFixed(1);
+            }
             
-            const factors = data.factors || [];
-            factors.forEach(f => {
-                const pct = Math.round((f.score / f.max_score) * 100);
-                factorsEl.innerHTML += `
-                    <div class="factor">
-                        <div class="factor-header">
-                            <span class="factor-name">${f.name}</span>
-                            <span class="factor-score">${pct}%</span>
-                        </div>
-                        <div class="factor-bar">
-                            <div class="factor-bar-fill" style="width: ${pct}%"></div>
-                        </div>
-                        <div class="factor-detail">${f.details || ''}</div>
+            // Recommendations
+            if (data.recommendations?.length > 0) {
+                document.getElementById('recommendations').classList.remove('hidden');
+                document.getElementById('recList').innerHTML = data.recommendations.slice(0, 4).map(r => `
+                    <div class="border-l-4 ${r.priority === 'critical' ? 'border-red-500 bg-red-50' : r.priority === 'high' ? 'border-amber-500 bg-amber-50' : 'border-gray-300 bg-gray-50'} p-3 rounded-r">
+                        <div class="font-medium text-sm">${r.title}</div>
+                        <div class="text-xs text-gray-600">${r.message}</div>
+                        <div class="text-xs text-green-600 mt-1">${r.impact}</div>
                     </div>
-                `;
-            });
-        }
-        
-        async function joinLeaderboard() {
-            const name = document.getElementById('display-name').value || 'Anonymous Gardener';
-            const ward = document.getElementById('ward').value || null;
-            
-            try {
-                const res = await fetch(`${API}/api/leaderboard/join`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lat: currentLocation.lat,
-                        lng: currentLocation.lng,
-                        score: currentScore.total_score,
-                        grade: currentScore.grade,
-                        display_name: name,
-                        ward: ward
-                    })
-                });
-                
-                const data = await res.json();
-                if (data.success) {
-                    alert(`Welcome, ${name}! You're #${data.rankings?.state?.rank || '?'} in Utah!`);
-                    location.href = 'leaderboard.html';
-                }
-            } catch (err) {
-                alert('Error joining: ' + err.message);
+                `).join('');
             }
+        }
+
+        function setScoreBar(id, value, max) {
+            document.getElementById(`${id}Score`).textContent = `${Math.round(value)}/${max}`;
+            document.getElementById(`${id}Bar`).style.width = `${(value / max) * 100}%`;
+        }
+
+        function getGradeColor(grade) {
+            if (grade.startsWith('A')) return 'text-green-600';
+            if (grade === 'B') return 'text-blue-600';
+            if (grade === 'C') return 'text-yellow-600';
+            return 'text-red-600';
         }
     </script>
-    <script src="js/nav.js"></script>
 </body>
 </html>
