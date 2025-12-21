@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habitat Assessment | Utah Pollinator Path</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-b from-green-50 to-amber-50 min-h-screen">
+    <div class="max-w-lg mx-auto p-4 pb-24">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-green-800">🏡 Habitat Assessment</h1>
+            <p class="text-gray-600">Based on Xerces Society standards</p>
+            <a href="https://www.xerces.org/pollinator-conservation" target="_blank" 
+               class="text-xs text-blue-600 underline">Learn about Xerces certification →</a>
+        </div>
+
+        <!-- Progress -->
+        <div class="mb-6">
+            <div class="flex justify-between text-sm text-gray-500 mb-1">
+                <span>Progress</span>
+                <span id="progressText">Section 1 of 5</span>
+            </div>
+            <div class="bg-gray-200 rounded-full h-2">
+                <div id="progressBar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 20%"></div>
+            </div>
+        </div>
+
+        <!-- Form Sections -->
+        <form id="assessmentForm">
+            <!-- Section 1: Site Info -->
+            <div id="section1" class="section bg-white rounded-xl shadow p-4 mb-4">
+                <h2 class="font-semibold text-lg mb-4">📍 Site Information</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Property Size (sq ft)</label>
+                        <select name="lot_size_sqft" class="w-full border rounded-lg px-3 py-2" required>
+                            <option value="">Select...</option>
+                            <option value="2500">Under 2,500 (small lot)</option>
+                            <option value="5000">2,500 - 7,500</option>
+                            <option value="10000">7,500 - 15,000</option>
+                            <option value="20000">15,000 - 30,000</option>
+                            <option value="43560">30,000+ (3/4 acre+)</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Estimated % of yard that is hardscape (driveway, patio, sidewalk)</label>
+                        <select name="impervious_surface_pct" class="w-full border rounded-lg px-3 py-2" required>
+                            <option value="">Select...</option>
+                            <option value="10">Under 10%</option>
+                            <option value="20">10-20%</option>
+                            <option value="30">20-30%</option>
+                            <option value="40">30-40%</option>
+                            <option value="50">40-50%</option>
+                            <option value="60">Over 50%</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Assessment Date</label>
+                        <input type="date" name="assessment_date" class="w-full border rounded-lg px-3 py-2" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Floral Resources (Xerces: Food) -->
+            <div id="section2" class="section bg-white rounded-xl shadow p-4 mb-4 hidden">
+                <h2 class="font-semibold text-lg mb-4">🌸 Floral Resources</h2>
+                <p class="text-sm text-gray-500 mb-4">Xerces Criterion: Provide abundant, diverse flowering plants</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Estimated % of yard with flowering plants</label>
+                        <select name="flower_coverage_pct" class="w-full border rounded-lg px-3 py-2" required>
+                            <option value="">Select...</option>
+                            <option value="5">Under 5%</option>
+                            <option value="10">5-10%</option>
+                            <option value="20">10-20%</option>
+                            <option value="30">20-30%</option>
+                            <option value="40">30-40%</option>
+                            <option value="50">Over 40%</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Which seasons have blooming plants? (check all)</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_spring_blooms" value="true">
+                                <span>Spring (March-May)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_summer_blooms" value="true">
+                                <span>Summer (June-August)</span>
+                            </label>
+                            <label class="flex items-center gap-2 bg-amber-50 p-2 rounded border border-amber-200">
+                                <input type="checkbox" name="has_fall_blooms" value="true">
+                                <span>🍂 Fall (September-October) <span class="text-amber-600 text-xs">CRITICAL for monarchs</span></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Approximately how many native plant SPECIES do you have?</label>
+                        <select name="native_species_count" class="w-full border rounded-lg px-3 py-2" required>
+                            <option value="">Select...</option>
+                            <option value="0">None that I know of</option>
+                            <option value="2">1-3 species</option>
+                            <option value="5">4-6 species</option>
+                            <option value="8">7-9 species</option>
+                            <option value="12">10+ species</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Do you have milkweed? (Monarch host plant)</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="milkweed_present" value="none" required>
+                                <span>No milkweed</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="milkweed_present" value="few">
+                                <span>1-2 plants</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="milkweed_present" value="some">
+                                <span>3-5 plants</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="milkweed_present" value="many">
+                                <span>6+ plants</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Nesting Habitat (Xerces: Nesting) -->
+            <div id="section3" class="section bg-white rounded-xl shadow p-4 mb-4 hidden">
+                <h2 class="font-semibold text-lg mb-4">🏠 Nesting Habitat</h2>
+                <p class="text-sm text-gray-500 mb-4">Xerces Criterion: Provide undisturbed nesting sites</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Ground nesting habitat (70% of native bees nest in ground)</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_bare_ground" value="true">
+                                <span>Bare soil patches (not mulched)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_sandy_areas" value="true">
+                                <span>Sandy or well-drained soil areas</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_sunny_ground" value="true">
+                                <span>Sunny, south-facing slopes</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Approximate bare ground area (sq ft)</label>
+                        <select name="bare_ground_sqft" class="w-full border rounded-lg px-3 py-2">
+                            <option value="0">None</option>
+                            <option value="5">Under 10 sq ft</option>
+                            <option value="15">10-25 sq ft</option>
+                            <option value="35">25-50 sq ft</option>
+                            <option value="75">50+ sq ft</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Cavity nesting habitat (30% of native bees)</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_dead_wood" value="true">
+                                <span>Dead wood / snags / logs</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_bee_hotel" value="true">
+                                <span>Bee hotel / nesting blocks</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_brush_pile" value="true">
+                                <span>Brush pile / rock pile</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_hollow_stems" value="true">
+                                <span>Pithy/hollow stems left standing</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: Management Practices (Xerces: Protect from pesticides) -->
+            <div id="section4" class="section bg-white rounded-xl shadow p-4 mb-4 hidden">
+                <h2 class="font-semibold text-lg mb-4">🌿 Management Practices</h2>
+                <p class="text-sm text-gray-500 mb-4">Xerces Criterion: Protect pollinators from pesticides</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Pesticide use on your property</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="pesticide_frequency" value="never" required>
+                                <span class="text-green-700">Never use pesticides</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="pesticide_frequency" value="rarely">
+                                <span>Rarely (emergency only)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="pesticide_frequency" value="sometimes">
+                                <span>Sometimes (few times per year)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="pesticide_frequency" value="often">
+                                <span class="text-red-600">Often (routine application)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Overwintering practices</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 bg-green-50 p-2 rounded border border-green-200">
+                                <input type="checkbox" name="leaves_stems_over_winter" value="true">
+                                <span>Leave stems/leaves through winter (until 50°F in spring)</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_leaf_litter" value="true">
+                                <span>Leave leaf litter in garden beds</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Mowing frequency in pollinator areas</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="mowing_frequency" value="never" required>
+                                <span>No-mow zone / meadow</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="mowing_frequency" value="monthly">
+                                <span>Monthly or less</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="mowing_frequency" value="biweekly">
+                                <span>Every 2 weeks</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="radio" name="mowing_frequency" value="weekly">
+                                <span>Weekly</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Estimated % of plants that are native</label>
+                        <select name="native_plant_pct" class="w-full border rounded-lg px-3 py-2">
+                            <option value="">Not sure</option>
+                            <option value="10">Under 20%</option>
+                            <option value="30">20-40%</option>
+                            <option value="50">40-60%</option>
+                            <option value="70">60-80%</option>
+                            <option value="90">Over 80%</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Connectivity & Water -->
+            <div id="section5" class="section bg-white rounded-xl shadow p-4 mb-4 hidden">
+                <h2 class="font-semibold text-lg mb-4">🔗 Connectivity & Water</h2>
+                <p class="text-sm text-gray-500 mb-4">Xerces Criterion: Landscape connectivity</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Neighbors with pollinator gardens (within sight)</label>
+                        <select name="neighbors_in_program" class="w-full border rounded-lg px-3 py-2">
+                            <option value="0">None that I know of</option>
+                            <option value="1">1 neighbor</option>
+                            <option value="2">2 neighbors</option>
+                            <option value="3">3-4 neighbors</option>
+                            <option value="5">5+ neighbors</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Nearby green space (parks, open space within ~500m)</label>
+                        <select name="green_space_nearby" class="w-full border rounded-lg px-3 py-2">
+                            <option value="none">None nearby</option>
+                            <option value="small">Small park/greenway</option>
+                            <option value="medium">Medium park or natural area</option>
+                            <option value="large">Large park / open space</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Water source for pollinators</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_water_source" value="true">
+                                <span>Shallow water dish with landing stones</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="has_mud_source" value="true">
+                                <span>Mud puddle area (for butterflies)</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Any additional notes about your habitat?</label>
+                        <textarea name="notes" class="w-full border rounded-lg px-3 py-2" rows="3" 
+                            placeholder="Special features, challenges, goals..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="flex gap-2">
+                <button type="button" id="prevBtn" onclick="changeSection(-1)" 
+                    class="flex-1 border py-3 rounded-xl hidden">← Back</button>
+                <button type="button" id="nextBtn" onclick="changeSection(1)" 
+                    class="flex-1 bg-green-600 text-white py-3 rounded-xl font-semibold">Next →</button>
+                <button type="submit" id="submitBtn" 
+                    class="flex-1 bg-green-600 text-white py-3 rounded-xl font-semibold hidden">
+                    Submit Assessment
+                </button>
+            </div>
+        </form>
+
+        <!-- Results (shown after submit) -->
+        <div id="results" class="hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-4 text-center">
+                <div class="text-4xl mb-2">✅</div>
+                <h2 class="text-xl font-bold mb-2">Assessment Complete!</h2>
+                <p class="text-gray-600 mb-4">Your habitat data has been saved.</p>
+                <div class="text-5xl font-bold mb-2" id="resultScore">--</div>
+                <div class="text-xl" id="resultGrade">--</div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow p-4 mb-4">
+                <h3 class="font-semibold mb-2">📤 Export Options</h3>
+                <div class="space-y-2">
+                    <button onclick="exportXerces()" class="w-full border border-green-600 text-green-600 py-2 rounded-lg">
+                        Export for Xerces Society
+                    </button>
+                    <button onclick="exportCSV()" class="w-full border py-2 rounded-lg">
+                        Download as CSV
+                    </button>
+                    <button onclick="exportJSON()" class="w-full border py-2 rounded-lg">
+                        Download as JSON (for validation)
+                    </button>
+                </div>
+            </div>
+            
+            <a href="score.html" class="block w-full bg-green-600 text-white py-3 rounded-xl font-semibold text-center">
+                View Full Score Breakdown →
+            </a>
+        </div>
+    </div>
+
+    <script src="js/nav.js"></script>
+    <script>
+        const API = '';
+        let token = localStorage.getItem('supabase_token');
+        let gridHash = localStorage.getItem('grid_hash') || '40.666_-111.897';
+        let currentSection = 1;
+        const totalSections = 5;
+        let assessmentData = null;
+
+        // Set today's date as default
+        document.querySelector('input[name="assessment_date"]').valueAsDate = new Date();
+
+        function changeSection(delta) {
+            // Validate current section
+            const current = document.getElementById(`section${currentSection}`);
+            const requiredFields = current.querySelectorAll('[required]');
+            let valid = true;
+            
+            if (delta > 0) {
+                requiredFields.forEach(field => {
+                    if (!field.value && field.type !== 'radio') {
+                        field.classList.add('border-red-500');
+                        valid = false;
+                    } else if (field.type === 'radio') {
+                        const radioGroup = current.querySelectorAll(`input[name="${field.name}"]`);
+                        const checked = Array.from(radioGroup).some(r => r.checked);
+                        if (!checked) {
+                            radioGroup.forEach(r => r.parentElement.classList.add('text-red-500'));
+                            valid = false;
+                        }
+                    } else {
+                        field.classList.remove('border-red-500');
+                    }
+                });
+                
+                if (!valid) return;
+            }
+            
+            // Hide current, show next
+            current.classList.add('hidden');
+            currentSection += delta;
+            document.getElementById(`section${currentSection}`).classList.remove('hidden');
+            
+            // Update progress
+            const progress = (currentSection / totalSections) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            document.getElementById('progressText').textContent = `Section ${currentSection} of ${totalSections}`;
+            
+            // Update buttons
+            document.getElementById('prevBtn').classList.toggle('hidden', currentSection === 1);
+            document.getElementById('nextBtn').classList.toggle('hidden', currentSection === totalSections);
+            document.getElementById('submitBtn').classList.toggle('hidden', currentSection !== totalSections);
+            
+            window.scrollTo(0, 0);
+        }
+
+        document.getElementById('assessmentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            assessmentData = {
+                // Meta
+                assessment_id: crypto.randomUUID(),
+                assessment_date: formData.get('assessment_date'),
+                assessment_version: '1.0',
+                grid_hash: gridHash,
+                
+                // Site
+                lot_size_sqft: parseInt(formData.get('lot_size_sqft')) || 0,
+                impervious_surface_pct: parseInt(formData.get('impervious_surface_pct')) || 0,
+                
+                // Floral
+                flower_coverage_pct: parseInt(formData.get('flower_coverage_pct')) || 0,
+                has_spring_blooms: formData.get('has_spring_blooms') === 'true',
+                has_summer_blooms: formData.get('has_summer_blooms') === 'true',
+                has_fall_blooms: formData.get('has_fall_blooms') === 'true',
+                native_species_count: parseInt(formData.get('native_species_count')) || 0,
+                milkweed_present: formData.get('milkweed_present'),
+                
+                // Nesting
+                has_bare_ground: formData.get('has_bare_ground') === 'true',
+                has_sandy_areas: formData.get('has_sandy_areas') === 'true',
+                has_sunny_ground: formData.get('has_sunny_ground') === 'true',
+                bare_ground_sqft: parseInt(formData.get('bare_ground_sqft')) || 0,
+                has_dead_wood: formData.get('has_dead_wood') === 'true',
+                has_bee_hotel: formData.get('has_bee_hotel') === 'true',
+                has_brush_pile: formData.get('has_brush_pile') === 'true',
+                has_hollow_stems: formData.get('has_hollow_stems') === 'true',
+                
+                // Management
+                pesticide_frequency: formData.get('pesticide_frequency'),
+                leaves_stems_over_winter: formData.get('leaves_stems_over_winter') === 'true',
+                has_leaf_litter: formData.get('has_leaf_litter') === 'true',
+                mowing_frequency: formData.get('mowing_frequency'),
+                native_plant_pct: parseInt(formData.get('native_plant_pct')) || 0,
+                
+                // Connectivity
+                neighbors_in_program: parseInt(formData.get('neighbors_in_program')) || 0,
+                green_space_nearby: formData.get('green_space_nearby'),
+                has_water_source: formData.get('has_water_source') === 'true',
+                has_mud_source: formData.get('has_mud_source') === 'true',
+                notes: formData.get('notes'),
+                
+                // Timestamps for validation
+                submitted_at: new Date().toISOString(),
+            };
+            
+            // Save to database
+            try {
+                const res = await fetch(`${API}/api/assessments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(assessmentData)
+                });
+                
+                const result = await res.json();
+                
+                // Show results
+                document.getElementById('assessmentForm').classList.add('hidden');
+                document.getElementById('results').classList.remove('hidden');
+                document.getElementById('resultScore').textContent = result.score || '--';
+                document.getElementById('resultGrade').textContent = result.grade || '';
+                
+            } catch (err) {
+                console.error(err);
+                alert('Error saving assessment. Data saved locally.');
+                localStorage.setItem('pending_assessment', JSON.stringify(assessmentData));
+            }
+        });
+
+        function exportXerces() {
+            // Format for Xerces Society Pollinator Habitat Assessment
+            const xerces = {
+                site_name: `Utah Pollinator Path - ${gridHash}`,
+                assessment_date: assessmentData.assessment_date,
+                
+                // Xerces categories
+                food_resources: {
+                    bloom_spring: assessmentData.has_spring_blooms,
+                    bloom_summer: assessmentData.has_summer_blooms,
+                    bloom_fall: assessmentData.has_fall_blooms,
+                    native_species_count: assessmentData.native_species_count,
+                    flowering_area_pct: assessmentData.flower_coverage_pct,
+                },
+                nesting_sites: {
+                    bare_ground_present: assessmentData.has_bare_ground,
+                    bare_ground_sqft: assessmentData.bare_ground_sqft,
+                    dead_wood_present: assessmentData.has_dead_wood,
+                    bee_boxes_present: assessmentData.has_bee_hotel,
+                    brush_piles_present: assessmentData.has_brush_pile,
+                    pithy_stems_present: assessmentData.has_hollow_stems,
+                },
+                protection: {
+                    pesticide_free: assessmentData.pesticide_frequency === 'never',
+                    pesticide_frequency: assessmentData.pesticide_frequency,
+                    overwinter_habitat: assessmentData.leaves_stems_over_winter,
+                },
+                special_features: {
+                    milkweed_present: assessmentData.milkweed_present !== 'none',
+                    milkweed_quantity: assessmentData.milkweed_present,
+                    water_source: assessmentData.has_water_source,
+                },
+                
+                // Validation metadata
+                _meta: {
+                    source: 'Utah Pollinator Path',
+                    version: assessmentData.assessment_version,
+                    assessment_id: assessmentData.assessment_id,
+                }
+            };
+            
+            downloadJSON(xerces, `xerces-assessment-${assessmentData.assessment_date}.json`);
+        }
+
+        function exportCSV() {
+            const headers = Object.keys(assessmentData);
+            const values = Object.values(assessmentData).map(v => 
+                typeof v === 'string' ? `"${v}"` : v
+            );
+            const csv = headers.join(',') + '\n' + values.join(',');
+            downloadFile(csv, `habitat-assessment-${assessmentData.assessment_date}.csv`, 'text/csv');
+        }
+
+        function exportJSON() {
+            downloadJSON(assessmentData, `habitat-assessment-${assessmentData.assessment_date}.json`);
+        }
+
+        function downloadJSON(data, filename) {
+            downloadFile(JSON.stringify(data, null, 2), filename, 'application/json');
+        }
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

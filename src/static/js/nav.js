@@ -1,9 +1,9 @@
 const NAV_ITEMS = [
     { href: "index.html", icon: "🏠", label: "Home", id: "home" },
     { href: "inventory.html", icon: "🌻", label: "Garden", id: "inventory" },
+    { href: "questionnaire.html", icon: "📋", label: "Assess", id: "questionnaire" },
     { href: "score.html", icon: "📊", label: "Score", id: "score" },
     { href: "challenges.html", icon: "⚔️", label: "Challenges", id: "challenges" },
-    { href: "badges.html", icon: "🏅", label: "Badges", id: "badges" },
 ];
 
 function getCurrentPage() {
@@ -14,8 +14,6 @@ function getCurrentPage() {
 
 function renderNav() {
     const currentPage = getCurrentPage();
-    
-    // Remove existing nav if any
     const existing = document.querySelector('nav.fixed.bottom-0');
     if (existing) existing.remove();
     
@@ -34,11 +32,10 @@ function renderNav() {
     
     document.body.appendChild(nav);
     
-    // Add spacer
-    const spacer = document.createElement('div');
-    spacer.className = 'h-16';
-    spacer.id = 'nav-spacer';
     if (!document.getElementById('nav-spacer')) {
+        const spacer = document.createElement('div');
+        spacer.className = 'h-16';
+        spacer.id = 'nav-spacer';
         document.body.appendChild(spacer);
     }
 }
