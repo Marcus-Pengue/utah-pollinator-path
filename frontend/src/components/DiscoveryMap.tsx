@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
-import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock, Thermometer, Grid3X3 } from 'lucide-react';
+import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock, Grid3X3 } from 'lucide-react';
 import { api } from '../api/client';
-import ClimatePanel from './ClimatePanel';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
@@ -45,30 +44,6 @@ const WILDLIFE_FILTERS: LayerConfig[] = [
   { id: 'Arachnida', name: 'Arachnids', icon: '🕷️', color: '#6b7280', visible: true },
   { id: 'Reptilia', name: 'Reptiles', icon: '🦎', color: '#84cc16', visible: true },
   { id: 'Amphibia', name: 'Amphibians', icon: '🐸', color: '#06b6d4', visible: true },
-];
-
-// Expanded query grid - 15 points covering Salt Lake Valley
-const QUERY_POINTS = [
-  // Central
-  { lat: 40.666, lng: -111.897, name: 'Murray' },
-  { lat: 40.760, lng: -111.891, name: 'SLC Downtown' },
-  { lat: 40.700, lng: -111.850, name: 'Millcreek' },
-  // South
-  { lat: 40.570, lng: -111.895, name: 'South Jordan' },
-  { lat: 40.525, lng: -111.860, name: 'Draper' },
-  { lat: 40.480, lng: -111.890, name: 'Lehi' },
-  // North  
-  { lat: 40.850, lng: -111.900, name: 'North SLC' },
-  { lat: 40.890, lng: -111.880, name: 'Bountiful' },
-  { lat: 40.950, lng: -111.900, name: 'Farmington' },
-  // East bench
-  { lat: 40.760, lng: -111.780, name: 'University' },
-  { lat: 40.666, lng: -111.750, name: 'Cottonwood' },
-  { lat: 40.620, lng: -111.780, name: 'Sandy East' },
-  // West
-  { lat: 40.666, lng: -112.000, name: 'West Valley' },
-  { lat: 40.720, lng: -112.030, name: 'Magna' },
-  { lat: 40.600, lng: -111.980, name: 'West Jordan' },
 ];
 
 const GRID_SIZE = 0.009;
@@ -123,7 +98,6 @@ const DiscoveryMap: React.FC = () => {
   const [loadingProgress, setLoadingProgress] = useState('');
   const [layerPanelOpen, setLayerPanelOpen] = useState(true);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
-  const [climatePanelOpen, setClimatePanelOpen] = useState(false);
   const [daysBack, setDaysBack] = useState(90);
   const [viewMode, setViewMode] = useState<'grid' | 'points'>('grid');
 
@@ -143,33 +117,29 @@ const DiscoveryMap: React.FC = () => {
 
   const fetchWildlifeData = useCallback(async () => {
     setLoading(true);
-    const allFeatures: Feature[] = [];
-    const seenIds = new Set<string>();
+    setLoadingProgress('Loading wildlife data...');
     
-    for (let i = 0; i < QUERY_POINTS.length; i++) {
-      const point = QUERY_POINTS[i];
-      setLoadingProgress(`${point.name} (${i + 1}/${QUERY_POINTS.length})`);
+    try {
+      // Use bulk endpoint for all data at once
+      const res = await api.get('/api/wildlife/bulk', {
+        params: { days: daysBack },
+        timeout: 120000  // 2 minute timeout for bulk load
+      });
       
+      setWildlifeFeatures(res.data.features || []);
+      setLoadingProgress(`Loaded ${res.data.total || 0} observations`);
+    } catch (err) {
+      console.error('Bulk load error, falling back to single queries:', err);
+      
+      // Fallback: load just center point
       try {
         const res = await api.get('/api/wildlife/unified', {
-          params: { lat: point.lat, lng: point.lng, radius: 20, taxon: 'all', days: daysBack }
+          params: { lat: 40.666, lng: -111.897, radius: 50, days: daysBack }
         });
-        
-        (res.data.features || []).forEach((f: Feature) => {
-          const id = f.properties.id || `${f.geometry.coordinates[0].toFixed(5)}-${f.geometry.coordinates[1].toFixed(5)}`;
-          if (!seenIds.has(String(id))) {
-            seenIds.add(String(id));
-            allFeatures.push(f);
-          }
-        });
-        
-        setWildlifeFeatures([...allFeatures]);
-      } catch (err) {
-        console.error(`Error ${point.name}:`, err);
+        setWildlifeFeatures(res.data.features || []);
+      } catch (e) {
+        console.error('Fallback also failed:', e);
       }
-      
-      // Small delay between requests to avoid overwhelming API
-      await new Promise(r => setTimeout(r, 200));
     }
     
     setLoading(false);
@@ -428,14 +398,6 @@ const DiscoveryMap: React.FC = () => {
             </div>
           </div>
         )}
-        <div style={{ padding: '10px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: climatePanelOpen ? '#f0f9ff' : 'white' }}
-          onClick={() => setClimatePanelOpen(!climatePanelOpen)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Thermometer size={16} color="#2563eb" /><span style={{ fontWeight: 500, fontSize: 12 }}>Climate</span>
-          </div>
-          {climatePanelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </div>
-        {climatePanelOpen && <ClimatePanel lat={viewState.latitude} lng={viewState.longitude} />}
       </div>
 
       {/* Time Filter */}
