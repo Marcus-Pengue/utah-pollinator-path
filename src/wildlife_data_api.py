@@ -154,7 +154,7 @@ async def inat_recent_observations(lat, lng, radius_km=25, taxon_id=None, days_b
         "lng": lng,
         "radius": radius_km,
         "d1": d1,
-        "per_page": 100,
+        "per_page": 200,
         "order": "desc",
         "order_by": "observed_on",
         "quality_grade": "research,needs_id",
