@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import Map, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
+import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
 import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock, Thermometer, Grid3X3 } from 'lucide-react';
 import { api } from '../api/client';
 import ClimatePanel from './ClimatePanel';
@@ -25,6 +25,7 @@ interface GridCell {
   lat: number;
   lng: number;
   count: number;
+  percentile: number;
   features: Feature[];
 }
 
@@ -55,45 +56,45 @@ const QUERY_POINTS = [
   { lat: 40.666, lng: -112.050, name: 'West Valley' },
 ];
 
-// Grid size in degrees (~1km at this latitude)
 const GRID_SIZE = 0.009; // ~1km
 
 function createGrid(features: Feature[], gridSize: number): GridCell[] {
-  const cells: Map<string, GridCell> = new Map();
+  const cellMap: Record<string, GridCell> = {};
   
   features.forEach(f => {
     const lat = f.geometry.coordinates[1];
     const lng = f.geometry.coordinates[0];
-    
-    // Snap to grid
     const gridLat = Math.floor(lat / gridSize) * gridSize + gridSize / 2;
     const gridLng = Math.floor(lng / gridSize) * gridSize + gridSize / 2;
     const key = `${gridLat.toFixed(4)},${gridLng.toFixed(4)}`;
     
-    if (cells.has(key)) {
-      const cell = cells.get(key)!;
-      cell.count++;
-      cell.features.push(f);
+    if (cellMap[key]) {
+      cellMap[key].count++;
+      cellMap[key].features.push(f);
     } else {
-      cells.set(key, {
-        lat: gridLat,
-        lng: gridLng,
-        count: 1,
-        features: [f],
-      });
+      cellMap[key] = { lat: gridLat, lng: gridLng, count: 1, percentile: 0, features: [f] };
     }
   });
   
-  return Array.from(cells.values());
+  // Calculate relative percentiles
+  const cells = Object.values(cellMap);
+  const counts = cells.map(c => c.count).sort((a, b) => a - b);
+  
+  cells.forEach(cell => {
+    const rank = counts.filter(c => c <= cell.count).length;
+    cell.percentile = rank / counts.length;
+  });
+  
+  return cells;
 }
 
-function getGridColor(count: number): string {
-  if (count >= 50) return '#dc2626'; // red
-  if (count >= 30) return '#ea580c'; // orange
-  if (count >= 20) return '#f59e0b'; // amber
-  if (count >= 10) return '#84cc16'; // lime
-  if (count >= 5) return '#22c55e';  // green
-  return '#86efac'; // light green
+function getGridColor(percentile: number): string {
+  if (percentile >= 0.95) return '#dc2626'; // top 5%
+  if (percentile >= 0.85) return '#ea580c'; // top 15%
+  if (percentile >= 0.70) return '#f59e0b'; // top 30%
+  if (percentile >= 0.50) return '#84cc16'; // top 50%
+  if (percentile >= 0.25) return '#22c55e'; // top 75%
+  return '#86efac'; // bottom 25%
 }
 
 const DiscoveryMap: React.FC = () => {
@@ -128,7 +129,7 @@ const DiscoveryMap: React.FC = () => {
       setFeatures(mapRes.data.features || []);
       setMonarchStatus(monarchRes.data);
     } catch (err) {
-      console.error('Failed to fetch map data:', err);
+      console.error('Map data error:', err);
     }
   }, [layers]);
 
@@ -139,7 +140,7 @@ const DiscoveryMap: React.FC = () => {
     
     for (let i = 0; i < QUERY_POINTS.length; i++) {
       const point = QUERY_POINTS[i];
-      setLoadingProgress(`Loading ${point.name}... (${i + 1}/${QUERY_POINTS.length})`);
+      setLoadingProgress(`${point.name} (${i + 1}/${QUERY_POINTS.length})`);
       
       try {
         const res = await api.get('/api/wildlife/unified', {
@@ -156,7 +157,7 @@ const DiscoveryMap: React.FC = () => {
         
         setWildlifeFeatures([...allFeatures]);
       } catch (err) {
-        console.error(`Failed to fetch ${point.name}:`, err);
+        console.error(`Error ${point.name}:`, err);
       }
     }
     
@@ -167,45 +168,28 @@ const DiscoveryMap: React.FC = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchWildlifeData(); }, [fetchWildlifeData]);
 
-  const toggleLayer = (id: string) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
-  };
-
-  const toggleWildlifeFilter = (id: string) => {
-    setWildlifeFilters(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
-  };
+  const toggleLayer = (id: string) => setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+  const toggleWildlifeFilter = (id: string) => setWildlifeFilters(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
 
   const isFeatureVisible = (feature: Feature): boolean => {
     const source = feature.properties.source;
     const taxon = feature.properties.iconic_taxon;
-    
     if (source === 'inaturalist' || source === 'gbif') {
-      const filter = wildlifeFilters.find(f => f.id === taxon);
-      return filter?.visible ?? true;
+      return wildlifeFilters.find(f => f.id === taxon)?.visible ?? true;
     }
-    
-    const layer = feature.properties.layer;
-    return layers.find(l => l.id === layer)?.visible ?? false;
+    return layers.find(l => l.id === feature.properties.layer)?.visible ?? false;
   };
 
   const getMarkerIcon = (feature: Feature): string => {
-    const taxon = feature.properties.iconic_taxon;
-    const filter = WILDLIFE_FILTERS.find(f => f.id === taxon);
+    const filter = WILDLIFE_FILTERS.find(f => f.id === feature.properties.iconic_taxon);
     if (filter) return filter.icon;
-    const layer = feature.properties.layer;
-    const layerConfig = layers.find(l => l.id === layer);
-    return layerConfig?.icon || '📍';
+    return layers.find(l => l.id === feature.properties.layer)?.icon || '📍';
   };
 
   const allFeatures = [...features, ...wildlifeFeatures];
   const visibleFeatures = allFeatures.filter(isFeatureVisible);
+  const gridCells = useMemo(() => createGrid(visibleFeatures, GRID_SIZE), [visibleFeatures]);
 
-  // Create grid from visible features
-  const gridCells = useMemo(() => {
-    return createGrid(visibleFeatures, GRID_SIZE);
-  }, [visibleFeatures]);
-
-  // Stats by taxon
   const taxonStats = useMemo(() => {
     const stats: Record<string, number> = {};
     wildlifeFeatures.forEach(f => {
@@ -215,7 +199,6 @@ const DiscoveryMap: React.FC = () => {
     return stats;
   }, [wildlifeFeatures]);
 
-  // GeoJSON for heatmap
   const heatmapData = useMemo(() => ({
     type: 'FeatureCollection' as const,
     features: visibleFeatures.map(f => ({
@@ -227,7 +210,7 @@ const DiscoveryMap: React.FC = () => {
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      <Map
+      <MapGL
         {...viewState}
         onMove={(evt: any) => setViewState(evt.viewState)}
         mapStyle="mapbox://styles/mapbox/light-v11"
@@ -236,33 +219,32 @@ const DiscoveryMap: React.FC = () => {
       >
         <NavigationControl position="bottom-right" />
         
-        {/* Heatmap layer */}
+        {/* Heatmap */}
         {viewMode === 'grid' && (
-          <Source id="heatmap-source" type="geojson" data={heatmapData}>
+          <Source id="heatmap" type="geojson" data={heatmapData}>
             <Layer
               id="heatmap-layer"
               type="heatmap"
               paint={{
                 'heatmap-weight': 1,
-                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 8, 1, 15, 3],
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 2],
                 'heatmap-color': [
                   'interpolate', ['linear'], ['heatmap-density'],
-                  0, 'rgba(0, 255, 0, 0)',
-                  0.1, 'rgba(134, 239, 172, 0.4)',
-                  0.3, 'rgba(34, 197, 94, 0.6)',
-                  0.5, 'rgba(132, 204, 22, 0.7)',
-                  0.7, 'rgba(245, 158, 11, 0.8)',
-                  0.9, 'rgba(234, 88, 12, 0.9)',
-                  1, 'rgba(220, 38, 38, 1)'
+                  0, 'rgba(0,255,0,0)',
+                  0.2, 'rgba(134,239,172,0.4)',
+                  0.4, 'rgba(34,197,94,0.5)',
+                  0.6, 'rgba(250,204,21,0.6)',
+                  0.8, 'rgba(249,115,22,0.7)',
+                  1, 'rgba(220,38,38,0.8)'
                 ],
-                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 15, 12, 25, 15, 35],
-                'heatmap-opacity': 0.8,
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 20, 13, 30],
+                'heatmap-opacity': 0.7,
               }}
             />
           </Source>
         )}
         
-        {/* Grid cells overlay */}
+        {/* Grid cells at higher zoom */}
         {viewMode === 'grid' && viewState.zoom >= 11 && gridCells.map((cell, idx) => (
           <Marker
             key={`grid-${idx}`}
@@ -270,341 +252,218 @@ const DiscoveryMap: React.FC = () => {
             longitude={cell.lng}
             onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedCell(cell); }}
           >
-            <div
-              style={{
-                width: Math.max(24, Math.min(50, 20 + cell.count)),
-                height: Math.max(24, Math.min(50, 20 + cell.count)),
-                borderRadius: 4,
-                backgroundColor: getGridColor(cell.count),
-                border: '2px solid white',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: cell.count >= 100 ? 10 : 11,
-                fontWeight: 600,
-                color: cell.count >= 20 ? 'white' : '#1a1a1a',
-                cursor: 'pointer',
-              }}
-            >
+            <div style={{
+              minWidth: 24, padding: '2px 6px', borderRadius: 4,
+              backgroundColor: getGridColor(cell.percentile),
+              border: '2px solid white',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              fontSize: 11, fontWeight: 600,
+              color: cell.percentile >= 0.5 ? 'white' : '#1a1a1a',
+              cursor: 'pointer', textAlign: 'center',
+            }}>
               {cell.count}
             </div>
           </Marker>
         ))}
 
-        {/* Individual points mode */}
-        {viewMode === 'points' && viewState.zoom >= 12 && visibleFeatures.slice(0, 500).map((feature, idx) => (
+        {/* Individual points */}
+        {viewMode === 'points' && viewState.zoom >= 11 && visibleFeatures.slice(0, 500).map((feature, idx) => (
           <Marker
-            key={`point-${feature.properties.id || idx}`}
+            key={`pt-${feature.properties.id || idx}`}
             latitude={feature.geometry.coordinates[1]}
             longitude={feature.geometry.coordinates[0]}
             onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedFeature(feature); }}
           >
             <div style={{
-              width: 26, height: 26, borderRadius: '50%',
-              backgroundColor: WILDLIFE_FILTERS.find(f => f.id === feature.properties.iconic_taxon)?.color || '#6b7280',
-              border: '2px solid white',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              width: 24, height: 24, borderRadius: '50%',
+              backgroundColor: WILDLIFE_FILTERS.find(f => f.id === feature.properties.iconic_taxon)?.color || '#666',
+              border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, cursor: 'pointer',
+              fontSize: 12, cursor: 'pointer',
             }}>
               {getMarkerIcon(feature)}
             </div>
           </Marker>
         ))}
 
-        {/* Grid Cell Popup */}
+        {/* Grid Popup */}
         {selectedCell && (
-          <Popup
-            latitude={selectedCell.lat}
-            longitude={selectedCell.lng}
-            onClose={() => setSelectedCell(null)}
-            closeButton closeOnClick={false} anchor="bottom" maxWidth="320px"
-          >
-            <div style={{ padding: 4, maxHeight: 300, overflowY: 'auto' }}>
+          <Popup latitude={selectedCell.lat} longitude={selectedCell.lng}
+            onClose={() => setSelectedCell(null)} closeButton anchor="bottom" maxWidth="300px">
+            <div style={{ padding: 4, maxHeight: 250, overflowY: 'auto' }}>
               <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>
-                📍 {selectedCell.count} observations in this area
+                {selectedCell.count} observations
+                <span style={{ fontSize: 11, color: '#666', fontWeight: 400 }}> (top {Math.round((1-selectedCell.percentile)*100)}%)</span>
               </h3>
-              
-              {/* Taxon breakdown */}
-              <div style={{ marginBottom: 10 }}>
-                {Object.entries(
-                  selectedCell.features.reduce((acc: Record<string, number>, f) => {
-                    const taxon = f.properties.iconic_taxon || 'Other';
-                    acc[taxon] = (acc[taxon] || 0) + 1;
-                    return acc;
-                  }, {})
-                ).sort((a, b) => b[1] - a[1]).map(([taxon, count]) => {
-                  const filter = WILDLIFE_FILTERS.find(f => f.id === taxon);
-                  return (
-                    <div key={taxon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 3 }}>
-                      <span>{filter?.icon || '📍'}</span>
-                      <span style={{ flex: 1 }}>{filter?.name || taxon}</span>
-                      <span style={{ fontWeight: 500 }}>{count}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Recent observations */}
-              <h4 style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>Recent observations:</h4>
-              {selectedCell.features.slice(0, 5).map((f, i) => (
-                <div key={i} style={{ 
-                  display: 'flex', alignItems: 'center', gap: 6, 
-                  padding: '4px 0', borderBottom: i < 4 ? '1px solid #eee' : 'none',
-                  fontSize: 11
-                }}>
-                  {f.properties.photo_url && (
-                    <img src={f.properties.photo_url} alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover' }} />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {f.properties.species || 'Unknown'}
-                    </div>
-                    <div style={{ color: '#999', fontSize: 10 }}>{f.properties.observed_on}</div>
+              {Object.entries(
+                selectedCell.features.reduce((acc: Record<string, number>, f) => {
+                  const t = f.properties.iconic_taxon || 'Other';
+                  acc[t] = (acc[t] || 0) + 1;
+                  return acc;
+                }, {})
+              ).sort((a, b) => b[1] - a[1]).map(([taxon, count]) => {
+                const filter = WILDLIFE_FILTERS.find(f => f.id === taxon);
+                return (
+                  <div key={taxon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 2 }}>
+                    <span>{filter?.icon || '📍'}</span>
+                    <span style={{ flex: 1 }}>{filter?.name || taxon}</span>
+                    <span style={{ fontWeight: 500 }}>{count}</span>
                   </div>
-                </div>
-              ))}
-              
-              {selectedCell.count > 5 && (
-                <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>
-                  +{selectedCell.count - 5} more observations
-                </div>
-              )}
+                );
+              })}
             </div>
           </Popup>
         )}
 
-        {/* Single Feature Popup */}
+        {/* Feature Popup */}
         {selectedFeature && (
-          <Popup
-            latitude={selectedFeature.geometry.coordinates[1]}
-            longitude={selectedFeature.geometry.coordinates[0]}
-            onClose={() => setSelectedFeature(null)}
-            closeButton closeOnClick={false} anchor="bottom" maxWidth="300px"
-          >
+          <Popup latitude={selectedFeature.geometry.coordinates[1]} longitude={selectedFeature.geometry.coordinates[0]}
+            onClose={() => setSelectedFeature(null)} closeButton anchor="bottom" maxWidth="280px">
             <div style={{ padding: 4 }}>
-              <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 600 }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600 }}>
                 {selectedFeature.properties.species || 'Unknown'}
               </h3>
-              {selectedFeature.properties.scientific_name && (
-                <p style={{ margin: '0 0 6px', fontSize: 12, fontStyle: 'italic', color: '#666' }}>
-                  {selectedFeature.properties.scientific_name}
-                </p>
-              )}
               {selectedFeature.properties.photo_url && (
-                <img src={selectedFeature.properties.photo_url} alt="" style={{ width: '100%', borderRadius: 6, marginBottom: 6 }} />
+                <img src={selectedFeature.properties.photo_url} alt="" style={{ width: '100%', borderRadius: 6, margin: '6px 0' }} />
               )}
               {selectedFeature.properties.observed_on && (
-                <p style={{ margin: '3px 0', fontSize: 11, color: '#666' }}>📅 {selectedFeature.properties.observed_on}</p>
+                <p style={{ margin: 2, fontSize: 11, color: '#666' }}>📅 {selectedFeature.properties.observed_on}</p>
               )}
               {selectedFeature.properties.url && (
-                <a href={selectedFeature.properties.url} target="_blank" rel="noopener noreferrer" 
-                   style={{ display: 'block', marginTop: 6, fontSize: 12, color: '#2563eb' }}>
-                  View on iNaturalist →
-                </a>
+                <a href={selectedFeature.properties.url} target="_blank" rel="noopener noreferrer"
+                   style={{ fontSize: 11, color: '#2563eb' }}>View on iNaturalist →</a>
               )}
             </div>
           </Popup>
         )}
-      </Map>
+      </MapGL>
 
       {/* Layer Panel */}
       <div style={{
         position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 260, maxHeight: 'calc(100vh - 120px)',
-        overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 250, maxHeight: 'calc(100vh - 120px)', overflow: 'hidden',
       }}>
-        <div style={{
-          padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
-        }} onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+          onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Layers size={18} />
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Layers & Filters</span>
+            <Layers size={18} /><span style={{ fontWeight: 600, fontSize: 14 }}>Layers</span>
           </div>
           {layerPanelOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </div>
 
         {layerPanelOpen && (
-          <div style={{ overflowY: 'auto', padding: 10 }}>
-            {/* View Mode Toggle */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-              <button
-                onClick={() => setViewMode('grid')}
-                style={{
-                  flex: 1, padding: '6px 10px', borderRadius: 6, border: 'none',
-                  backgroundColor: viewMode === 'grid' ? '#22c55e' : '#f3f4f6',
-                  color: viewMode === 'grid' ? 'white' : '#666',
-                  cursor: 'pointer', fontSize: 11, fontWeight: 500,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
-                }}
-              >
-                <Grid3X3 size={14} /> Grid
-              </button>
-              <button
-                onClick={() => setViewMode('points')}
-                style={{
-                  flex: 1, padding: '6px 10px', borderRadius: 6, border: 'none',
-                  backgroundColor: viewMode === 'points' ? '#22c55e' : '#f3f4f6',
-                  color: viewMode === 'points' ? 'white' : '#666',
-                  cursor: 'pointer', fontSize: 11, fontWeight: 500,
-                }}
-              >
-                📍 Points
-              </button>
+          <div style={{ overflowY: 'auto', padding: 10, maxHeight: 'calc(100vh - 200px)' }}>
+            {/* View Toggle */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+              <button onClick={() => setViewMode('grid')} style={{
+                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
+                backgroundColor: viewMode === 'grid' ? '#22c55e' : '#f3f4f6',
+                color: viewMode === 'grid' ? 'white' : '#666', cursor: 'pointer', fontSize: 11, fontWeight: 500,
+              }}><Grid3X3 size={12} style={{ marginRight: 4 }} />Grid</button>
+              <button onClick={() => setViewMode('points')} style={{
+                flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
+                backgroundColor: viewMode === 'points' ? '#22c55e' : '#f3f4f6',
+                color: viewMode === 'points' ? 'white' : '#666', cursor: 'pointer', fontSize: 11, fontWeight: 500,
+              }}>📍 Points</button>
             </div>
-          
-            {/* Map Layers */}
-            <h4 style={{ fontSize: 10, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase' }}>Map Layers</h4>
+
+            <h4 style={{ fontSize: 10, color: '#888', marginBottom: 6 }}>MAP LAYERS</h4>
             {layers.map(layer => (
-              <div key={layer.id} style={{
-                display: 'flex', alignItems: 'center', padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
-                backgroundColor: layer.visible ? `${layer.color}18` : 'transparent', marginBottom: 2,
-              }} onClick={() => toggleLayer(layer.id)}>
-                <span style={{ fontSize: 14, marginRight: 8 }}>{layer.icon}</span>
-                <span style={{ flex: 1, fontSize: 12 }}>{layer.name}</span>
-                {layer.visible ? <Eye size={14} color={layer.color} /> : <EyeOff size={14} color="#bbb" />}
+              <div key={layer.id} onClick={() => toggleLayer(layer.id)} style={{
+                display: 'flex', alignItems: 'center', padding: '5px 8px', borderRadius: 6, cursor: 'pointer',
+                backgroundColor: layer.visible ? `${layer.color}15` : 'transparent', marginBottom: 2,
+              }}>
+                <span style={{ fontSize: 13, marginRight: 8 }}>{layer.icon}</span>
+                <span style={{ flex: 1, fontSize: 11 }}>{layer.name}</span>
+                {layer.visible ? <Eye size={13} color={layer.color} /> : <EyeOff size={13} color="#ccc" />}
               </div>
             ))}
 
-            {/* Wildlife Filters */}
-            <h4 style={{ fontSize: 10, color: '#6b7280', margin: '12px 0 6px', textTransform: 'uppercase' }}>
-              Wildlife ({wildlifeFeatures.length.toLocaleString()})
-            </h4>
+            <h4 style={{ fontSize: 10, color: '#888', margin: '10px 0 6px' }}>WILDLIFE ({wildlifeFeatures.length.toLocaleString()})</h4>
             {wildlifeFilters.map(filter => (
-              <div key={filter.id} style={{
-                display: 'flex', alignItems: 'center', padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-                backgroundColor: filter.visible ? `${filter.color}18` : 'transparent', marginBottom: 2,
-              }} onClick={() => toggleWildlifeFilter(filter.id)}>
-                <span style={{ fontSize: 13, marginRight: 8 }}>{filter.icon}</span>
+              <div key={filter.id} onClick={() => toggleWildlifeFilter(filter.id)} style={{
+                display: 'flex', alignItems: 'center', padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
+                backgroundColor: filter.visible ? `${filter.color}15` : 'transparent', marginBottom: 2,
+              }}>
+                <span style={{ fontSize: 12, marginRight: 6 }}>{filter.icon}</span>
                 <span style={{ flex: 1, fontSize: 11 }}>{filter.name}</span>
-                <span style={{ fontSize: 10, color: '#999', marginRight: 6 }}>{taxonStats[filter.id] || 0}</span>
-                {filter.visible ? <Eye size={13} color={filter.color} /> : <EyeOff size={13} color="#bbb" />}
+                <span style={{ fontSize: 10, color: '#999', marginRight: 4 }}>{taxonStats[filter.id] || 0}</span>
+                {filter.visible ? <Eye size={12} color={filter.color} /> : <EyeOff size={12} color="#ccc" />}
               </div>
             ))}
 
             {/* Legend */}
-            {viewMode === 'grid' && (
-              <div style={{ marginTop: 12, padding: 10, backgroundColor: '#f9fafb', borderRadius: 6 }}>
-                <h4 style={{ fontSize: 10, color: '#6b7280', marginBottom: 6 }}>DENSITY</h4>
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {[
-                    { color: '#86efac', label: '1-4' },
-                    { color: '#22c55e', label: '5-9' },
-                    { color: '#84cc16', label: '10-19' },
-                    { color: '#f59e0b', label: '20-29' },
-                    { color: '#ea580c', label: '30-49' },
-                    { color: '#dc2626', label: '50+' },
-                  ].map(l => (
-                    <div key={l.color} style={{ flex: 1, textAlign: 'center' }}>
-                      <div style={{ width: '100%', height: 8, backgroundColor: l.color, borderRadius: 2 }} />
-                      <div style={{ fontSize: 8, color: '#666', marginTop: 2 }}>{l.label}</div>
-                    </div>
-                  ))}
-                </div>
+            <div style={{ marginTop: 10, padding: 8, backgroundColor: '#f9fafb', borderRadius: 6 }}>
+              <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>RELATIVE DENSITY</div>
+              <div style={{ display: 'flex', gap: 2 }}>
+                {['#86efac', '#22c55e', '#84cc16', '#f59e0b', '#ea580c', '#dc2626'].map((c, i) => (
+                  <div key={c} style={{ flex: 1, height: 6, backgroundColor: c, borderRadius: 1 }} />
+                ))}
               </div>
-            )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#999', marginTop: 2 }}>
+                <span>Low</span><span>High</span>
+              </div>
+            </div>
 
-            {/* Stats */}
-            <div style={{ marginTop: 12, padding: 10, backgroundColor: '#f3f4f6', borderRadius: 6, fontSize: 11 }}>
-              📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> observations
-              {viewMode === 'grid' && <span> in <strong>{gridCells.length}</strong> cells</span>}
-              {loading && <div style={{ color: '#666', marginTop: 4 }}>{loadingProgress || 'Loading...'}</div>}
+            <div style={{ marginTop: 10, padding: 8, backgroundColor: '#f3f4f6', borderRadius: 6, fontSize: 11 }}>
+              📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> visible
+              {loading && <div style={{ color: '#666', marginTop: 2 }}>{loadingProgress}</div>}
             </div>
           </div>
         )}
       </div>
 
       {/* Info Panel */}
-      <div style={{
-        position: 'absolute', top: 16, right: 16, backgroundColor: 'white', borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 280, overflow: 'hidden',
-      }}>
-        <div style={{
-          padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
-        }} onClick={() => setInfoPanelOpen(!infoPanelOpen)}>
+      <div style={{ position: 'absolute', top: 16, right: 16, backgroundColor: 'white', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 260, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+          onClick={() => setInfoPanelOpen(!infoPanelOpen)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Info size={18} />
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Utah Pollinator Path</span>
+            <Info size={18} /><span style={{ fontWeight: 600, fontSize: 14 }}>Utah Pollinator Path</span>
           </div>
           {infoPanelOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </div>
-
         {infoPanelOpen && (
           <div style={{ padding: 12 }}>
             {monarchStatus && (
-              <div style={{ padding: 10, backgroundColor: '#fef3c7', borderRadius: 8, marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <span style={{ fontSize: 18 }}>🦋</span>
-                  <span style={{ fontWeight: 600, fontSize: 12 }}>Monarch Status</span>
+              <div style={{ padding: 10, backgroundColor: '#fef3c7', borderRadius: 8, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 16 }}>🦋</span>
+                  <span style={{ fontWeight: 600, fontSize: 12 }}>Monarch: {monarchStatus.status}</span>
                 </div>
-                <p style={{ fontSize: 11, margin: 0, color: '#92400e' }}>{monarchStatus.utah_note}</p>
+                <p style={{ fontSize: 11, margin: '4px 0 0', color: '#92400e' }}>{monarchStatus.utah_note}</p>
               </div>
             )}
-            
-            <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+            <div style={{ fontSize: 12, lineHeight: 1.6 }}>
               <div>🌳 <strong>{features.filter(f => f.properties.layer === 'parks').length}</strong> parks</div>
               <div>🦋 <strong>{features.filter(f => f.properties.layer === 'waystations').length}</strong> waystations</div>
-              <div>📸 <strong>{wildlifeFeatures.length.toLocaleString()}</strong> wildlife observations</div>
+              <div>📸 <strong>{wildlifeFeatures.length.toLocaleString()}</strong> observations</div>
             </div>
           </div>
         )}
-        
-        {/* Climate Panel Toggle */}
-        <div style={{
-          padding: '10px 16px', borderTop: '1px solid #e5e7eb',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
-          backgroundColor: climatePanelOpen ? '#f0f9ff' : 'white',
-        }} onClick={() => setClimatePanelOpen(!climatePanelOpen)}>
+        <div style={{ padding: '10px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', backgroundColor: climatePanelOpen ? '#f0f9ff' : 'white' }}
+          onClick={() => setClimatePanelOpen(!climatePanelOpen)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Thermometer size={16} color="#2563eb" />
-            <span style={{ fontWeight: 500, fontSize: 13 }}>Climate Data</span>
+            <Thermometer size={16} color="#2563eb" /><span style={{ fontWeight: 500, fontSize: 12 }}>Climate</span>
           </div>
-          {climatePanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {climatePanelOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </div>
-        
-        {climatePanelOpen && (
-          <ClimatePanel lat={viewState.latitude} lng={viewState.longitude} />
-        )}
+        {climatePanelOpen && <ClimatePanel lat={viewState.latitude} lng={viewState.longitude} />}
       </div>
 
       {/* Time Filter */}
-      <div style={{
-        position: 'absolute', bottom: 70, left: '50%', transform: 'translateX(-50%)',
-        backgroundColor: 'white', padding: '8px 14px', borderRadius: 10,
-        boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
-        display: 'flex', gap: 5, alignItems: 'center',
-      }}>
-        <Clock size={14} color="#666" />
-        {[
-          { label: '30d', days: 30 },
-          { label: '90d', days: 90 },
-          { label: '1yr', days: 365 },
-          { label: 'All', days: 1825 },
-        ].map(p => (
-          <button
-            key={p.days}
-            onClick={() => setDaysBack(p.days)}
-            style={{
-              padding: '4px 10px', borderRadius: 5, border: 'none',
-              backgroundColor: daysBack === p.days ? '#22c55e' : '#f0f0f0',
-              color: daysBack === p.days ? 'white' : '#444',
-              cursor: 'pointer', fontSize: 11, fontWeight: 500,
-            }}
-          >
-            {p.label}
-          </button>
+      <div style={{ position: 'absolute', bottom: 60, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '6px 12px', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', gap: 4, alignItems: 'center' }}>
+        <Clock size={12} color="#666" />
+        {[{ label: '30d', days: 30 }, { label: '90d', days: 90 }, { label: '1yr', days: 365 }, { label: 'All', days: 1825 }].map(p => (
+          <button key={p.days} onClick={() => setDaysBack(p.days)} style={{
+            padding: '3px 8px', borderRadius: 4, border: 'none',
+            backgroundColor: daysBack === p.days ? '#22c55e' : '#f0f0f0',
+            color: daysBack === p.days ? 'white' : '#555', cursor: 'pointer', fontSize: 10, fontWeight: 500,
+          }}>{p.label}</button>
         ))}
       </div>
 
       {/* Title */}
-      <div style={{
-        position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-        backgroundColor: 'white', padding: '8px 22px', borderRadius: 20,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.12)', fontSize: 14, fontWeight: 500,
-      }}>
+      <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '6px 18px', borderRadius: 16, boxShadow: '0 2px 6px rgba(0,0,0,0.1)', fontSize: 13, fontWeight: 500 }}>
         🐝 Utah Pollinator Path
       </div>
     </div>
