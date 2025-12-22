@@ -151,6 +151,7 @@ from admin_auth import register_admin_routes as register_admin_auth_routes
 from government_api import register_government_routes
 from external_data_api import register_external_data_routes
 from unified_map_api import register_unified_map_routes
+from enhanced_map_data import register_enhanced_map_routes
 register_admin_routes(app)
 register_species_routes(app)
 register_advisor_routes(app)
@@ -170,6 +171,7 @@ register_admin_auth_routes(app)
 register_government_routes(app)
 register_external_data_routes(app)
 register_unified_map_routes(app)
+register_enhanced_map_routes(app)
 
 
 # =============================================================================
