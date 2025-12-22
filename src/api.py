@@ -153,6 +153,7 @@ from external_data_api import register_external_data_routes
 from unified_map_api import register_unified_map_routes
 from enhanced_map_data import register_enhanced_map_routes
 from wildlife_data_api import register_wildlife_routes
+from climate_data_api import register_climate_routes
 register_admin_routes(app)
 register_species_routes(app)
 register_advisor_routes(app)
@@ -174,6 +175,7 @@ register_external_data_routes(app)
 register_unified_map_routes(app)
 register_enhanced_map_routes(app)
 register_wildlife_routes(app)
+register_climate_routes(app)
 
 
 # =============================================================================
