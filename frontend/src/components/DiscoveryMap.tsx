@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Map, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
-import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock } from 'lucide-react';
+import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock, Thermometer } from 'lucide-react';
 import { api } from '../api/client';
+import ClimatePanel from './ClimatePanel';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
@@ -21,16 +22,21 @@ interface LayerConfig {
 }
 
 const DEFAULT_LAYERS: LayerConfig[] = [
-  { id: 'participation', name: 'Pollinator Gardens', icon: '🌻', color: '#22c55e', visible: true },
   { id: 'parks', name: 'Parks & Green Spaces', icon: '🌳', color: '#16a34a', visible: true },
   { id: 'nurseries', name: 'Native Plant Nurseries', icon: '🪴', color: '#84cc16', visible: true },
   { id: 'waystations', name: 'Monarch Waystations', icon: '🦋', color: '#f97316', visible: true },
   { id: 'bee_cities', name: 'Bee City Communities', icon: '🐝', color: '#eab308', visible: true },
 ];
 
-const WILDLIFE_LAYERS: LayerConfig[] = [
-  { id: 'inaturalist', name: 'iNaturalist', icon: '📸', color: '#74ac00', visible: true },
-  { id: 'motus', name: 'Motus Stations', icon: '📡', color: '#9333ea', visible: true },
+const WILDLIFE_FILTERS: LayerConfig[] = [
+  { id: 'Aves', name: 'Birds', icon: '🐦', color: '#3b82f6', visible: true },
+  { id: 'Insecta', name: 'Insects', icon: '🦋', color: '#8b5cf6', visible: true },
+  { id: 'Plantae', name: 'Plants', icon: '🌿', color: '#22c55e', visible: true },
+  { id: 'Mammalia', name: 'Mammals', icon: '🦊', color: '#f97316', visible: true },
+  { id: 'Fungi', name: 'Fungi', icon: '🍄', color: '#ef4444', visible: true },
+  { id: 'Arachnida', name: 'Arachnids', icon: '🕷️', color: '#6b7280', visible: true },
+  { id: 'Reptilia', name: 'Reptiles', icon: '🦎', color: '#84cc16', visible: true },
+  { id: 'Amphibia', name: 'Amphibians', icon: '🐸', color: '#06b6d4', visible: true },
 ];
 
 const QUERY_POINTS = [
@@ -40,10 +46,6 @@ const QUERY_POINTS = [
   { lat: 40.850, lng: -111.900, name: 'North SLC' },
   { lat: 40.666, lng: -111.750, name: 'Cottonwood' },
   { lat: 40.666, lng: -112.050, name: 'West Valley' },
-  { lat: 40.480, lng: -111.900, name: 'Lehi' },
-  { lat: 40.950, lng: -111.880, name: 'Bountiful' },
-  { lat: 40.760, lng: -111.750, name: 'University' },
-  { lat: 41.100, lng: -111.950, name: 'Ogden' },
 ];
 
 const DiscoveryMap: React.FC = () => {
@@ -54,7 +56,7 @@ const DiscoveryMap: React.FC = () => {
   });
   
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
-  const [wildlifeLayers, setWildlifeLayers] = useState(WILDLIFE_LAYERS);
+  const [wildlifeFilters, setWildlifeFilters] = useState(WILDLIFE_FILTERS);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [wildlifeFeatures, setWildlifeFeatures] = useState<Feature[]>([]);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
@@ -63,6 +65,7 @@ const DiscoveryMap: React.FC = () => {
   const [loadingProgress, setLoadingProgress] = useState('');
   const [layerPanelOpen, setLayerPanelOpen] = useState(true);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
+  const [climatePanelOpen, setClimatePanelOpen] = useState(false);
   const [daysBack, setDaysBack] = useState(90);
 
   const fetchData = useCallback(async () => {
@@ -80,16 +83,10 @@ const DiscoveryMap: React.FC = () => {
   }, [layers]);
 
   const fetchWildlifeData = useCallback(async () => {
-    if (!wildlifeLayers.some(l => l.visible)) {
-      setWildlifeFeatures([]);
-      return;
-    }
-    
     setLoading(true);
     const allFeatures: Feature[] = [];
     const seenIds = new Set<string>();
     
-    // Load sequentially to avoid overwhelming the server
     for (let i = 0; i < QUERY_POINTS.length; i++) {
       const point = QUERY_POINTS[i];
       setLoadingProgress(`Loading ${point.name}... (${i + 1}/${QUERY_POINTS.length})`);
@@ -107,7 +104,6 @@ const DiscoveryMap: React.FC = () => {
           }
         });
         
-        // Update progressively so user sees data appearing
         setWildlifeFeatures([...allFeatures]);
       } catch (err) {
         console.error(`Failed to fetch ${point.name}:`, err);
@@ -116,62 +112,66 @@ const DiscoveryMap: React.FC = () => {
     
     setLoading(false);
     setLoadingProgress('');
-  }, [wildlifeLayers, daysBack]);
+  }, [daysBack]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => {
-    fetchWildlifeData();
-  }, [fetchWildlifeData]);
+  useEffect(() => { fetchWildlifeData(); }, [fetchWildlifeData]);
 
   const toggleLayer = (id: string) => {
     setLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
   };
 
-  const toggleWildlifeLayer = (id: string) => {
-    setWildlifeLayers(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
+  const toggleWildlifeFilter = (id: string) => {
+    setWildlifeFilters(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
   };
 
   const getMarkerColor = (feature: Feature): string => {
-    const source = feature.properties.source;
-    if (source === 'inaturalist') return '#74ac00';
-    if (source === 'gbif') return '#0066cc';
+    const taxon = feature.properties.iconic_taxon;
+    const filter = wildlifeFilters.find(f => f.id === taxon);
+    if (filter) return filter.color;
+    
     const layer = feature.properties.layer;
-    const config = [...layers, ...wildlifeLayers].find(l => l.id === layer);
-    return config?.color || '#6b7280';
+    const layerConfig = layers.find(l => l.id === layer);
+    return layerConfig?.color || '#6b7280';
   };
 
   const getMarkerIcon = (feature: Feature): string => {
-    const source = feature.properties.source;
     const taxon = feature.properties.iconic_taxon;
-    
-    if (source === 'inaturalist' || source === 'gbif') {
-      if (taxon === 'Aves') return '🐦';
-      if (taxon === 'Insecta') return '🦋';
-      if (taxon === 'Mammalia') return '🦊';
-      if (taxon === 'Reptilia') return '🦎';
-      if (taxon === 'Amphibia') return '🐸';
-      if (taxon === 'Plantae') return '🌿';
-      if (taxon === 'Fungi') return '🍄';
-      if (taxon === 'Arachnida') return '🕷️';
-      return '📸';
-    }
+    const filter = wildlifeFilters.find(f => f.id === taxon);
+    if (filter) return filter.icon;
     
     const layer = feature.properties.layer;
-    const config = [...layers, ...wildlifeLayers].find(l => l.id === layer);
-    return config?.icon || '📍';
+    const layerConfig = layers.find(l => l.id === layer);
+    return layerConfig?.icon || '📍';
   };
 
   const isFeatureVisible = (feature: Feature): boolean => {
     const source = feature.properties.source;
+    const taxon = feature.properties.iconic_taxon;
+    
+    // Wildlife observations
     if (source === 'inaturalist' || source === 'gbif') {
-      return wildlifeLayers.find(l => l.id === 'inaturalist')?.visible || false;
+      const filter = wildlifeFilters.find(f => f.id === taxon);
+      return filter?.visible ?? true;
     }
+    
+    // Map layers
     const layer = feature.properties.layer;
-    return layers.find(l => l.id === layer)?.visible || false;
+    return layers.find(l => l.id === layer)?.visible ?? false;
   };
 
   const allFeatures = [...features, ...wildlifeFeatures];
   const visibleFeatures = allFeatures.filter(isFeatureVisible);
+
+  // Stats by taxon
+  const taxonStats = useMemo(() => {
+    const stats: Record<string, number> = {};
+    wildlifeFeatures.forEach(f => {
+      const taxon = f.properties.iconic_taxon || 'Other';
+      stats[taxon] = (stats[taxon] || 0) + 1;
+    });
+    return stats;
+  }, [wildlifeFeatures]);
 
   const geojsonData = useMemo(() => ({
     type: 'FeatureCollection' as const,
@@ -193,7 +193,7 @@ const DiscoveryMap: React.FC = () => {
         interactiveLayerIds={['clusters']}
         onClick={(e: any) => {
           const features = e.features;
-          if (features && features.length > 0 && features[0].layer.id === 'clusters') {
+          if (features?.length > 0 && features[0].layer.id === 'clusters') {
             setViewState(prev => ({
               ...prev,
               latitude: features[0].geometry.coordinates[1],
@@ -218,8 +218,8 @@ const DiscoveryMap: React.FC = () => {
             type="circle"
             filter={['has', 'point_count']}
             paint={{
-              'circle-color': ['step', ['get', 'point_count'], '#74ac00', 10, '#f59e0b', 50, '#ef4444', 100, '#dc2626'],
-              'circle-radius': ['step', ['get', 'point_count'], 18, 10, 24, 50, 32, 100, 40],
+              'circle-color': ['step', ['get', 'point_count'], '#22c55e', 20, '#f59e0b', 100, '#ef4444'],
+              'circle-radius': ['step', ['get', 'point_count'], 18, 20, 26, 100, 36],
               'circle-stroke-width': 2,
               'circle-stroke-color': '#fff'
             }}
@@ -279,6 +279,9 @@ const DiscoveryMap: React.FC = () => {
               {selectedFeature.properties.observed_on && (
                 <p style={{ margin: '3px 0', fontSize: 11, color: '#666' }}>📅 {selectedFeature.properties.observed_on}</p>
               )}
+              {selectedFeature.properties.user && (
+                <p style={{ margin: '3px 0', fontSize: 11, color: '#666' }}>👤 {selectedFeature.properties.user}</p>
+              )}
               <p style={{ margin: '6px 0 0', fontSize: 10, color: '#999' }}>
                 Source: {selectedFeature.properties.source || selectedFeature.properties.layer}
               </p>
@@ -296,7 +299,8 @@ const DiscoveryMap: React.FC = () => {
       {/* Layer Panel */}
       <div style={{
         position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 250, overflow: 'hidden',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 260, maxHeight: 'calc(100vh - 120px)',
+        overflow: 'hidden', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{
           padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
@@ -304,18 +308,19 @@ const DiscoveryMap: React.FC = () => {
         }} onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Layers size={18} />
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Map Layers</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Layers & Filters</span>
           </div>
           {layerPanelOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </div>
 
         {layerPanelOpen && (
-          <div style={{ padding: 10, maxHeight: 400, overflowY: 'auto' }}>
-            <h4 style={{ fontSize: 10, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase' }}>Program</h4>
+          <div style={{ overflowY: 'auto', padding: 10 }}>
+            {/* Map Layers */}
+            <h4 style={{ fontSize: 10, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase' }}>Map Layers</h4>
             {layers.map(layer => (
               <div key={layer.id} style={{
                 display: 'flex', alignItems: 'center', padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
-                backgroundColor: layer.visible ? `${layer.color}18` : 'transparent', marginBottom: 3,
+                backgroundColor: layer.visible ? `${layer.color}18` : 'transparent', marginBottom: 2,
               }} onClick={() => toggleLayer(layer.id)}>
                 <span style={{ fontSize: 14, marginRight: 8 }}>{layer.icon}</span>
                 <span style={{ flex: 1, fontSize: 12 }}>{layer.name}</span>
@@ -323,20 +328,25 @@ const DiscoveryMap: React.FC = () => {
               </div>
             ))}
 
-            <h4 style={{ fontSize: 10, color: '#6b7280', margin: '12px 0 6px', textTransform: 'uppercase' }}>Wildlife</h4>
-            {wildlifeLayers.map(layer => (
-              <div key={layer.id} style={{
-                display: 'flex', alignItems: 'center', padding: '6px 10px', borderRadius: 6, cursor: 'pointer',
-                backgroundColor: layer.visible ? `${layer.color}18` : 'transparent', marginBottom: 3,
-              }} onClick={() => toggleWildlifeLayer(layer.id)}>
-                <span style={{ fontSize: 14, marginRight: 8 }}>{layer.icon}</span>
-                <span style={{ flex: 1, fontSize: 12 }}>{layer.name}</span>
-                {layer.visible ? <Eye size={14} color={layer.color} /> : <EyeOff size={14} color="#bbb" />}
+            {/* Wildlife Filters */}
+            <h4 style={{ fontSize: 10, color: '#6b7280', margin: '12px 0 6px', textTransform: 'uppercase' }}>
+              Wildlife ({wildlifeFeatures.length.toLocaleString()})
+            </h4>
+            {wildlifeFilters.map(filter => (
+              <div key={filter.id} style={{
+                display: 'flex', alignItems: 'center', padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+                backgroundColor: filter.visible ? `${filter.color}18` : 'transparent', marginBottom: 2,
+              }} onClick={() => toggleWildlifeFilter(filter.id)}>
+                <span style={{ fontSize: 13, marginRight: 8 }}>{filter.icon}</span>
+                <span style={{ flex: 1, fontSize: 11 }}>{filter.name}</span>
+                <span style={{ fontSize: 10, color: '#999', marginRight: 6 }}>{taxonStats[filter.id] || 0}</span>
+                {filter.visible ? <Eye size={13} color={filter.color} /> : <EyeOff size={13} color="#bbb" />}
               </div>
             ))}
 
+            {/* Stats */}
             <div style={{ marginTop: 12, padding: 10, backgroundColor: '#f3f4f6', borderRadius: 6, fontSize: 11 }}>
-              📍 <strong>{visibleFeatures.length}</strong> features
+              📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> visible
               {loading && <div style={{ color: '#666', marginTop: 4 }}>{loadingProgress || 'Loading...'}</div>}
             </div>
           </div>
@@ -346,7 +356,7 @@ const DiscoveryMap: React.FC = () => {
       {/* Info Panel */}
       <div style={{
         position: 'absolute', top: 16, right: 16, backgroundColor: 'white', borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 260, overflow: 'hidden',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 280, overflow: 'hidden',
       }}>
         <div style={{
           padding: '12px 16px', borderBottom: '1px solid #e5e7eb',
@@ -360,23 +370,40 @@ const DiscoveryMap: React.FC = () => {
         </div>
 
         {infoPanelOpen && (
-          <div style={{ padding: 14 }}>
+          <div style={{ padding: 12 }}>
             {monarchStatus && (
               <div style={{ padding: 10, backgroundColor: '#fef3c7', borderRadius: 8, marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                  <span style={{ fontSize: 20 }}>🦋</span>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>Monarch Status</span>
+                  <span style={{ fontSize: 18 }}>🦋</span>
+                  <span style={{ fontWeight: 600, fontSize: 12 }}>Monarch Status</span>
                 </div>
-                <p style={{ fontSize: 12, margin: 0, color: '#92400e' }}>{monarchStatus.utah_note}</p>
+                <p style={{ fontSize: 11, margin: 0, color: '#92400e' }}>{monarchStatus.utah_note}</p>
               </div>
             )}
             
-            <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+            <div style={{ fontSize: 12, lineHeight: 1.7 }}>
               <div>🌳 <strong>{features.filter(f => f.properties.layer === 'parks').length}</strong> parks</div>
               <div>🦋 <strong>{features.filter(f => f.properties.layer === 'waystations').length}</strong> waystations</div>
-              <div>📸 <strong>{wildlifeFeatures.length}</strong> wildlife observations</div>
+              <div>📸 <strong>{wildlifeFeatures.length.toLocaleString()}</strong> wildlife observations</div>
             </div>
           </div>
+        )}
+        
+        {/* Climate Panel Toggle */}
+        <div style={{
+          padding: '10px 16px', borderTop: '1px solid #e5e7eb',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+          backgroundColor: climatePanelOpen ? '#f0f9ff' : 'white',
+        }} onClick={() => setClimatePanelOpen(!climatePanelOpen)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Thermometer size={16} color="#2563eb" />
+            <span style={{ fontWeight: 500, fontSize: 13 }}>Climate Data</span>
+          </div>
+          {climatePanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+        
+        {climatePanelOpen && (
+          <ClimatePanel lat={viewState.latitude} lng={viewState.longitude} />
         )}
       </div>
 

@@ -370,3 +370,60 @@ def register_wildlife_routes(app):
             ],
             "taxon_groups": [t["name"] for t in TAXON_QUERIES],
         })
+
+
+# ============ CACHE INTEGRATION ============
+try:
+    from wildlife_cache import get_cached_observations, get_cache_stats
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+
+
+async def get_unified_wildlife_with_cache(lat, lng, radius_km=25, days_back=30, use_cache=True):
+    """Get wildlife from cache + live API for comprehensive data."""
+    all_observations = []
+    seen_ids = set()
+    source_stats = {}
+    
+    # Try cache first
+    if use_cache and CACHE_AVAILABLE:
+        cached = get_cached_observations(lat, lng, radius_km, limit=2000)
+        source_stats["cache"] = {"count": len(cached)}
+        for obs in cached:
+            if obs["id"] not in seen_ids:
+                seen_ids.add(obs["id"])
+                all_observations.append(obs)
+    
+    # Then fetch live data for recent observations
+    live_obs = await inat_multi_taxon(lat, lng, radius_km, min(days_back, 30))
+    source_stats["live_inaturalist"] = {"count": len(live_obs)}
+    
+    for obs in live_obs:
+        if obs["id"] not in seen_ids:
+            seen_ids.add(obs["id"])
+            all_observations.append(obs)
+    
+    # GBIF for historical depth
+    gbif_result = await gbif_occurrences(lat, lng, radius_km)
+    if gbif_result.get("occurrences"):
+        source_stats["gbif"] = {"count": len(gbif_result["occurrences"])}
+        for obs in gbif_result["occurrences"]:
+            obs_id = f"gbif-{obs.get('id', obs.get('gbif_id'))}"
+            if obs_id not in seen_ids:
+                seen_ids.add(obs_id)
+                all_observations.append(obs)
+    
+    return {
+        "type": "FeatureCollection",
+        "sources": source_stats,
+        "total_observations": len(all_observations),
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [obs["lng"], obs["lat"]]},
+                "properties": obs
+            }
+            for obs in all_observations
+        ],
+    }
