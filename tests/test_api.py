@@ -255,6 +255,76 @@ def test_government_endpoints():
     test("Report has executive_summary", isinstance(data, dict) and "executive_summary" in data)
 
 
+def test_external_data_endpoints():
+    print("\n📋 External Data Endpoints")
+    
+    status, data = get("/api/external/sources")
+    test("GET /api/external/sources", status == 200)
+    test("Sources has sources array", isinstance(data, dict) and "sources" in data)
+    
+    status, data = get("/api/external/species?lat=40.666&lng=-111.897")
+    test("GET /api/external/species", status == 200)
+    test("Species has local_context", isinstance(data, dict) and "local_context" in data)
+    
+    status, data = get("/api/external/nlcd?lat=40.666&lng=-111.897")
+    test("GET /api/external/nlcd", status == 200)
+    
+    status, data = get("/api/external/enrich?lat=40.666&lng=-111.897")
+    test("GET /api/external/enrich", status == 200)
+
+
+def test_unified_map_endpoints():
+    print("\n📋 Unified Map Endpoints")
+    
+    status, data = get("/api/map/layers")
+    test("GET /api/map/layers", status == 200)
+    test("Layers has layers array", isinstance(data, dict) and "layers" in data)
+    
+    status, data = get("/api/map/unified")
+    test("GET /api/map/unified", status == 200)
+    test("Unified has features", isinstance(data, dict) and "features" in data)
+    
+    status, data = get("/api/map/unified?layers=parks,participation")
+    test("GET /api/map/unified with filter", status == 200)
+    
+    status, data = get("/api/map/bloom-calendar")
+    test("GET /api/map/bloom-calendar", status == 200)
+
+
+def test_enhanced_map_endpoints():
+    print("\n📋 Enhanced Map Endpoints")
+    
+    status, data = get("/api/map/monarch-status")
+    test("GET /api/map/monarch-status", status == 200)
+    test("Monarch has status", isinstance(data, dict) and "status" in data)
+    
+    status, data = get("/api/map/frost-dates?lat=40.666&lng=-111.897")
+    test("GET /api/map/frost-dates", status == 200)
+    test("Frost has zone", isinstance(data, dict) and "zone" in data)
+    
+    status, data = get("/api/map/waystations")
+    test("GET /api/map/waystations", status == 200)
+    test("Waystations has features", isinstance(data, dict) and "features" in data)
+    
+    status, data = get("/api/map/bee-cities")
+    test("GET /api/map/bee-cities", status == 200)
+    
+    status, data = get("/api/map/corridors")
+    test("GET /api/map/corridors", status == 200)
+    test("Corridors has corridors", isinstance(data, dict) and "corridors" in data)
+    
+    status, data = get("/api/map/parks")
+    test("GET /api/map/parks", status == 200)
+    
+    status, data = get("/api/map/elevation?lat=40.666&lng=-111.897")
+    test("GET /api/map/elevation", status == 200)
+    test("Elevation has elevation_ft", isinstance(data, dict) and "elevation_ft" in data)
+    
+    status, data = get("/api/map/enhanced?lat=40.666&lng=-111.897")
+    test("GET /api/map/enhanced", status == 200)
+    test("Enhanced has data_sources", isinstance(data, dict) and "data_sources" in data)
+
+
 def print_summary():
     total = results["passed"] + results["failed"] + results["skipped"]
     
@@ -297,6 +367,9 @@ if __name__ == "__main__":
     test_stats_endpoints()
     test_events_endpoints()
     test_government_endpoints()
+    test_external_data_endpoints()
+    test_unified_map_endpoints()
+    test_enhanced_map_endpoints()
     
     elapsed = time.time() - start
     print(f"\n⏱️  Completed in {elapsed:.1f}s")
