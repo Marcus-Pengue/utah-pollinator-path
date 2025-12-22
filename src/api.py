@@ -149,6 +149,7 @@ from jobs_engine import register_jobs_routes
 from event_logger import register_events_routes
 from admin_auth import register_admin_routes as register_admin_auth_routes
 from government_api import register_government_routes
+from external_data_api import register_external_data_routes
 register_admin_routes(app)
 register_species_routes(app)
 register_advisor_routes(app)
@@ -166,6 +167,7 @@ register_jobs_routes(app)
 register_events_routes(app)
 register_admin_auth_routes(app)
 register_government_routes(app)
+register_external_data_routes(app)
 
 
 # =============================================================================
