@@ -47,16 +47,31 @@ const WILDLIFE_FILTERS: LayerConfig[] = [
   { id: 'Amphibia', name: 'Amphibians', icon: '🐸', color: '#06b6d4', visible: true },
 ];
 
+// Expanded query grid - 15 points covering Salt Lake Valley
 const QUERY_POINTS = [
+  // Central
   { lat: 40.666, lng: -111.897, name: 'Murray' },
-  { lat: 40.760, lng: -111.891, name: 'SLC' },
+  { lat: 40.760, lng: -111.891, name: 'SLC Downtown' },
+  { lat: 40.700, lng: -111.850, name: 'Millcreek' },
+  // South
   { lat: 40.570, lng: -111.895, name: 'South Jordan' },
+  { lat: 40.525, lng: -111.860, name: 'Draper' },
+  { lat: 40.480, lng: -111.890, name: 'Lehi' },
+  // North  
   { lat: 40.850, lng: -111.900, name: 'North SLC' },
+  { lat: 40.890, lng: -111.880, name: 'Bountiful' },
+  { lat: 40.950, lng: -111.900, name: 'Farmington' },
+  // East bench
+  { lat: 40.760, lng: -111.780, name: 'University' },
   { lat: 40.666, lng: -111.750, name: 'Cottonwood' },
-  { lat: 40.666, lng: -112.050, name: 'West Valley' },
+  { lat: 40.620, lng: -111.780, name: 'Sandy East' },
+  // West
+  { lat: 40.666, lng: -112.000, name: 'West Valley' },
+  { lat: 40.720, lng: -112.030, name: 'Magna' },
+  { lat: 40.600, lng: -111.980, name: 'West Jordan' },
 ];
 
-const GRID_SIZE = 0.009; // ~1km
+const GRID_SIZE = 0.009;
 
 function createGrid(features: Feature[], gridSize: number): GridCell[] {
   const cellMap: Record<string, GridCell> = {};
@@ -76,10 +91,8 @@ function createGrid(features: Feature[], gridSize: number): GridCell[] {
     }
   });
   
-  // Calculate relative percentiles
   const cells = Object.values(cellMap);
   const counts = cells.map(c => c.count).sort((a, b) => a - b);
-  
   cells.forEach(cell => {
     const rank = counts.filter(c => c <= cell.count).length;
     cell.percentile = rank / counts.length;
@@ -89,21 +102,16 @@ function createGrid(features: Feature[], gridSize: number): GridCell[] {
 }
 
 function getGridColor(percentile: number): string {
-  if (percentile >= 0.95) return '#dc2626'; // top 5%
-  if (percentile >= 0.85) return '#ea580c'; // top 15%
-  if (percentile >= 0.70) return '#f59e0b'; // top 30%
-  if (percentile >= 0.50) return '#84cc16'; // top 50%
-  if (percentile >= 0.25) return '#22c55e'; // top 75%
-  return '#86efac'; // bottom 25%
+  if (percentile >= 0.95) return '#dc2626';
+  if (percentile >= 0.85) return '#ea580c';
+  if (percentile >= 0.70) return '#f59e0b';
+  if (percentile >= 0.50) return '#84cc16';
+  if (percentile >= 0.25) return '#22c55e';
+  return '#86efac';
 }
 
 const DiscoveryMap: React.FC = () => {
-  const [viewState, setViewState] = useState({
-    latitude: 40.666,
-    longitude: -111.897,
-    zoom: 10
-  });
-  
+  const [viewState, setViewState] = useState({ latitude: 40.666, longitude: -111.897, zoom: 10 });
   const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const [wildlifeFilters, setWildlifeFilters] = useState(WILDLIFE_FILTERS);
   const [features, setFeatures] = useState<Feature[]>([]);
@@ -144,7 +152,7 @@ const DiscoveryMap: React.FC = () => {
       
       try {
         const res = await api.get('/api/wildlife/unified', {
-          params: { lat: point.lat, lng: point.lng, radius: 40, taxon: 'all', days: daysBack }
+          params: { lat: point.lat, lng: point.lng, radius: 20, taxon: 'all', days: daysBack }
         });
         
         (res.data.features || []).forEach((f: Feature) => {
@@ -159,6 +167,9 @@ const DiscoveryMap: React.FC = () => {
       } catch (err) {
         console.error(`Error ${point.name}:`, err);
       }
+      
+      // Small delay between requests to avoid overwhelming API
+      await new Promise(r => setTimeout(r, 200));
     }
     
     setLoading(false);
@@ -219,7 +230,6 @@ const DiscoveryMap: React.FC = () => {
       >
         <NavigationControl position="bottom-right" />
         
-        {/* Heatmap */}
         {viewMode === 'grid' && (
           <Source id="heatmap" type="geojson" data={heatmapData}>
             <Layer
@@ -244,49 +254,33 @@ const DiscoveryMap: React.FC = () => {
           </Source>
         )}
         
-        {/* Grid cells at higher zoom */}
         {viewMode === 'grid' && viewState.zoom >= 11 && gridCells.map((cell, idx) => (
-          <Marker
-            key={`grid-${idx}`}
-            latitude={cell.lat}
-            longitude={cell.lng}
-            onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedCell(cell); }}
-          >
+          <Marker key={`grid-${idx}`} latitude={cell.lat} longitude={cell.lng}
+            onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedCell(cell); }}>
             <div style={{
               minWidth: 24, padding: '2px 6px', borderRadius: 4,
               backgroundColor: getGridColor(cell.percentile),
-              border: '2px solid white',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              fontSize: 11, fontWeight: 600,
-              color: cell.percentile >= 0.5 ? 'white' : '#1a1a1a',
+              border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              fontSize: 11, fontWeight: 600, color: cell.percentile >= 0.5 ? 'white' : '#1a1a1a',
               cursor: 'pointer', textAlign: 'center',
-            }}>
-              {cell.count}
-            </div>
+            }}>{cell.count}</div>
           </Marker>
         ))}
 
-        {/* Individual points */}
         {viewMode === 'points' && viewState.zoom >= 11 && visibleFeatures.slice(0, 500).map((feature, idx) => (
-          <Marker
-            key={`pt-${feature.properties.id || idx}`}
-            latitude={feature.geometry.coordinates[1]}
-            longitude={feature.geometry.coordinates[0]}
-            onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedFeature(feature); }}
-          >
+          <Marker key={`pt-${feature.properties.id || idx}`}
+            latitude={feature.geometry.coordinates[1]} longitude={feature.geometry.coordinates[0]}
+            onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedFeature(feature); }}>
             <div style={{
               width: 24, height: 24, borderRadius: '50%',
               backgroundColor: WILDLIFE_FILTERS.find(f => f.id === feature.properties.iconic_taxon)?.color || '#666',
               border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, cursor: 'pointer',
-            }}>
-              {getMarkerIcon(feature)}
-            </div>
+            }}>{getMarkerIcon(feature)}</div>
           </Marker>
         ))}
 
-        {/* Grid Popup */}
         {selectedCell && (
           <Popup latitude={selectedCell.lat} longitude={selectedCell.lng}
             onClose={() => setSelectedCell(null)} closeButton anchor="bottom" maxWidth="300px">
@@ -315,7 +309,6 @@ const DiscoveryMap: React.FC = () => {
           </Popup>
         )}
 
-        {/* Feature Popup */}
         {selectedFeature && (
           <Popup latitude={selectedFeature.geometry.coordinates[1]} longitude={selectedFeature.geometry.coordinates[0]}
             onClose={() => setSelectedFeature(null)} closeButton anchor="bottom" maxWidth="280px">
@@ -339,10 +332,7 @@ const DiscoveryMap: React.FC = () => {
       </MapGL>
 
       {/* Layer Panel */}
-      <div style={{
-        position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 12,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 250, maxHeight: 'calc(100vh - 120px)', overflow: 'hidden',
-      }}>
+      <div style={{ position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', width: 250, maxHeight: 'calc(100vh - 120px)', overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
           onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -353,7 +343,6 @@ const DiscoveryMap: React.FC = () => {
 
         {layerPanelOpen && (
           <div style={{ overflowY: 'auto', padding: 10, maxHeight: 'calc(100vh - 200px)' }}>
-            {/* View Toggle */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
               <button onClick={() => setViewMode('grid')} style={{
                 flex: 1, padding: '5px 8px', borderRadius: 6, border: 'none',
@@ -392,11 +381,10 @@ const DiscoveryMap: React.FC = () => {
               </div>
             ))}
 
-            {/* Legend */}
             <div style={{ marginTop: 10, padding: 8, backgroundColor: '#f9fafb', borderRadius: 6 }}>
               <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>RELATIVE DENSITY</div>
               <div style={{ display: 'flex', gap: 2 }}>
-                {['#86efac', '#22c55e', '#84cc16', '#f59e0b', '#ea580c', '#dc2626'].map((c, i) => (
+                {['#86efac', '#22c55e', '#84cc16', '#f59e0b', '#ea580c', '#dc2626'].map((c) => (
                   <div key={c} style={{ flex: 1, height: 6, backgroundColor: c, borderRadius: 1 }} />
                 ))}
               </div>
@@ -462,7 +450,6 @@ const DiscoveryMap: React.FC = () => {
         ))}
       </div>
 
-      {/* Title */}
       <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '6px 18px', borderRadius: 16, boxShadow: '0 2px 6px rgba(0,0,0,0.1)', fontSize: 13, fontWeight: 500 }}>
         🐝 Utah Pollinator Path
       </div>
