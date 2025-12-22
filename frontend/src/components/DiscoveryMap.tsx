@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Map, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
-import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock, Thermometer } from 'lucide-react';
+import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Clock, Thermometer, Grid3X3 } from 'lucide-react';
 import { api } from '../api/client';
 import ClimatePanel from './ClimatePanel';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -19,6 +19,13 @@ interface LayerConfig {
   icon: string;
   color: string;
   visible: boolean;
+}
+
+interface GridCell {
+  lat: number;
+  lng: number;
+  count: number;
+  features: Feature[];
 }
 
 const DEFAULT_LAYERS: LayerConfig[] = [
@@ -48,6 +55,47 @@ const QUERY_POINTS = [
   { lat: 40.666, lng: -112.050, name: 'West Valley' },
 ];
 
+// Grid size in degrees (~1km at this latitude)
+const GRID_SIZE = 0.009; // ~1km
+
+function createGrid(features: Feature[], gridSize: number): GridCell[] {
+  const cells: Map<string, GridCell> = new Map();
+  
+  features.forEach(f => {
+    const lat = f.geometry.coordinates[1];
+    const lng = f.geometry.coordinates[0];
+    
+    // Snap to grid
+    const gridLat = Math.floor(lat / gridSize) * gridSize + gridSize / 2;
+    const gridLng = Math.floor(lng / gridSize) * gridSize + gridSize / 2;
+    const key = `${gridLat.toFixed(4)},${gridLng.toFixed(4)}`;
+    
+    if (cells.has(key)) {
+      const cell = cells.get(key)!;
+      cell.count++;
+      cell.features.push(f);
+    } else {
+      cells.set(key, {
+        lat: gridLat,
+        lng: gridLng,
+        count: 1,
+        features: [f],
+      });
+    }
+  });
+  
+  return Array.from(cells.values());
+}
+
+function getGridColor(count: number): string {
+  if (count >= 50) return '#dc2626'; // red
+  if (count >= 30) return '#ea580c'; // orange
+  if (count >= 20) return '#f59e0b'; // amber
+  if (count >= 10) return '#84cc16'; // lime
+  if (count >= 5) return '#22c55e';  // green
+  return '#86efac'; // light green
+}
+
 const DiscoveryMap: React.FC = () => {
   const [viewState, setViewState] = useState({
     latitude: 40.666,
@@ -59,6 +107,7 @@ const DiscoveryMap: React.FC = () => {
   const [wildlifeFilters, setWildlifeFilters] = useState(WILDLIFE_FILTERS);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [wildlifeFeatures, setWildlifeFeatures] = useState<Feature[]>([]);
+  const [selectedCell, setSelectedCell] = useState<GridCell | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
   const [monarchStatus, setMonarchStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +116,7 @@ const DiscoveryMap: React.FC = () => {
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
   const [climatePanelOpen, setClimatePanelOpen] = useState(false);
   const [daysBack, setDaysBack] = useState(90);
+  const [viewMode, setViewMode] = useState<'grid' | 'points'>('grid');
 
   const fetchData = useCallback(async () => {
     try {
@@ -125,43 +175,35 @@ const DiscoveryMap: React.FC = () => {
     setWildlifeFilters(prev => prev.map(l => l.id === id ? { ...l, visible: !l.visible } : l));
   };
 
-  const getMarkerColor = (feature: Feature): string => {
-    const taxon = feature.properties.iconic_taxon;
-    const filter = wildlifeFilters.find(f => f.id === taxon);
-    if (filter) return filter.color;
-    
-    const layer = feature.properties.layer;
-    const layerConfig = layers.find(l => l.id === layer);
-    return layerConfig?.color || '#6b7280';
-  };
-
-  const getMarkerIcon = (feature: Feature): string => {
-    const taxon = feature.properties.iconic_taxon;
-    const filter = wildlifeFilters.find(f => f.id === taxon);
-    if (filter) return filter.icon;
-    
-    const layer = feature.properties.layer;
-    const layerConfig = layers.find(l => l.id === layer);
-    return layerConfig?.icon || '📍';
-  };
-
   const isFeatureVisible = (feature: Feature): boolean => {
     const source = feature.properties.source;
     const taxon = feature.properties.iconic_taxon;
     
-    // Wildlife observations
     if (source === 'inaturalist' || source === 'gbif') {
       const filter = wildlifeFilters.find(f => f.id === taxon);
       return filter?.visible ?? true;
     }
     
-    // Map layers
     const layer = feature.properties.layer;
     return layers.find(l => l.id === layer)?.visible ?? false;
   };
 
+  const getMarkerIcon = (feature: Feature): string => {
+    const taxon = feature.properties.iconic_taxon;
+    const filter = WILDLIFE_FILTERS.find(f => f.id === taxon);
+    if (filter) return filter.icon;
+    const layer = feature.properties.layer;
+    const layerConfig = layers.find(l => l.id === layer);
+    return layerConfig?.icon || '📍';
+  };
+
   const allFeatures = [...features, ...wildlifeFeatures];
   const visibleFeatures = allFeatures.filter(isFeatureVisible);
+
+  // Create grid from visible features
+  const gridCells = useMemo(() => {
+    return createGrid(visibleFeatures, GRID_SIZE);
+  }, [visibleFeatures]);
 
   // Stats by taxon
   const taxonStats = useMemo(() => {
@@ -173,12 +215,13 @@ const DiscoveryMap: React.FC = () => {
     return stats;
   }, [wildlifeFeatures]);
 
-  const geojsonData = useMemo(() => ({
+  // GeoJSON for heatmap
+  const heatmapData = useMemo(() => ({
     type: 'FeatureCollection' as const,
     features: visibleFeatures.map(f => ({
       type: 'Feature' as const,
-      geometry: f.geometry,
-      properties: { ...f.properties }
+      geometry: { type: 'Point' as const, coordinates: f.geometry.coordinates },
+      properties: { mag: 1 }
     }))
   }), [visibleFeatures]);
 
@@ -187,76 +230,152 @@ const DiscoveryMap: React.FC = () => {
       <Map
         {...viewState}
         onMove={(evt: any) => setViewState(evt.viewState)}
-        mapStyle="mapbox://styles/mapbox/outdoors-v12"
+        mapStyle="mapbox://styles/mapbox/light-v11"
         mapboxAccessToken={MAPBOX_TOKEN}
         style={{ width: '100%', height: '100%' }}
-        interactiveLayerIds={['clusters']}
-        onClick={(e: any) => {
-          const features = e.features;
-          if (features?.length > 0 && features[0].layer.id === 'clusters') {
-            setViewState(prev => ({
-              ...prev,
-              latitude: features[0].geometry.coordinates[1],
-              longitude: features[0].geometry.coordinates[0],
-              zoom: prev.zoom + 2
-            }));
-          }
-        }}
       >
         <NavigationControl position="bottom-right" />
         
-        <Source
-          id="wildlife"
-          type="geojson"
-          data={geojsonData}
-          cluster={true}
-          clusterMaxZoom={14}
-          clusterRadius={50}
-        >
-          <Layer
-            id="clusters"
-            type="circle"
-            filter={['has', 'point_count']}
-            paint={{
-              'circle-color': ['step', ['get', 'point_count'], '#22c55e', 20, '#f59e0b', 100, '#ef4444'],
-              'circle-radius': ['step', ['get', 'point_count'], 18, 20, 26, 100, 36],
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#fff'
-            }}
-          />
-          <Layer
-            id="cluster-count"
-            type="symbol"
-            filter={['has', 'point_count']}
-            layout={{
-              'text-field': '{point_count_abbreviated}',
-              'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-              'text-size': 13
-            }}
-            paint={{ 'text-color': '#ffffff' }}
-          />
-        </Source>
+        {/* Heatmap layer */}
+        {viewMode === 'grid' && (
+          <Source id="heatmap-source" type="geojson" data={heatmapData}>
+            <Layer
+              id="heatmap-layer"
+              type="heatmap"
+              paint={{
+                'heatmap-weight': 1,
+                'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 8, 1, 15, 3],
+                'heatmap-color': [
+                  'interpolate', ['linear'], ['heatmap-density'],
+                  0, 'rgba(0, 255, 0, 0)',
+                  0.1, 'rgba(134, 239, 172, 0.4)',
+                  0.3, 'rgba(34, 197, 94, 0.6)',
+                  0.5, 'rgba(132, 204, 22, 0.7)',
+                  0.7, 'rgba(245, 158, 11, 0.8)',
+                  0.9, 'rgba(234, 88, 12, 0.9)',
+                  1, 'rgba(220, 38, 38, 1)'
+                ],
+                'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 15, 12, 25, 15, 35],
+                'heatmap-opacity': 0.8,
+              }}
+            />
+          </Source>
+        )}
         
-        {viewState.zoom >= 12 && visibleFeatures.map((feature, idx) => (
+        {/* Grid cells overlay */}
+        {viewMode === 'grid' && viewState.zoom >= 11 && gridCells.map((cell, idx) => (
           <Marker
-            key={`marker-${feature.properties.id || idx}`}
+            key={`grid-${idx}`}
+            latitude={cell.lat}
+            longitude={cell.lng}
+            onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedCell(cell); }}
+          >
+            <div
+              style={{
+                width: Math.max(24, Math.min(50, 20 + cell.count)),
+                height: Math.max(24, Math.min(50, 20 + cell.count)),
+                borderRadius: 4,
+                backgroundColor: getGridColor(cell.count),
+                border: '2px solid white',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: cell.count >= 100 ? 10 : 11,
+                fontWeight: 600,
+                color: cell.count >= 20 ? 'white' : '#1a1a1a',
+                cursor: 'pointer',
+              }}
+            >
+              {cell.count}
+            </div>
+          </Marker>
+        ))}
+
+        {/* Individual points mode */}
+        {viewMode === 'points' && viewState.zoom >= 12 && visibleFeatures.slice(0, 500).map((feature, idx) => (
+          <Marker
+            key={`point-${feature.properties.id || idx}`}
             latitude={feature.geometry.coordinates[1]}
             longitude={feature.geometry.coordinates[0]}
             onClick={(e: any) => { e.originalEvent.stopPropagation(); setSelectedFeature(feature); }}
           >
             <div style={{
-              width: 30, height: 30, borderRadius: '50%',
-              backgroundColor: getMarkerColor(feature),
+              width: 26, height: 26, borderRadius: '50%',
+              backgroundColor: WILDLIFE_FILTERS.find(f => f.id === feature.properties.iconic_taxon)?.color || '#6b7280',
               border: '2px solid white',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 15, cursor: 'pointer',
+              fontSize: 13, cursor: 'pointer',
             }}>
               {getMarkerIcon(feature)}
             </div>
           </Marker>
         ))}
 
+        {/* Grid Cell Popup */}
+        {selectedCell && (
+          <Popup
+            latitude={selectedCell.lat}
+            longitude={selectedCell.lng}
+            onClose={() => setSelectedCell(null)}
+            closeButton closeOnClick={false} anchor="bottom" maxWidth="320px"
+          >
+            <div style={{ padding: 4, maxHeight: 300, overflowY: 'auto' }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>
+                📍 {selectedCell.count} observations in this area
+              </h3>
+              
+              {/* Taxon breakdown */}
+              <div style={{ marginBottom: 10 }}>
+                {Object.entries(
+                  selectedCell.features.reduce((acc: Record<string, number>, f) => {
+                    const taxon = f.properties.iconic_taxon || 'Other';
+                    acc[taxon] = (acc[taxon] || 0) + 1;
+                    return acc;
+                  }, {})
+                ).sort((a, b) => b[1] - a[1]).map(([taxon, count]) => {
+                  const filter = WILDLIFE_FILTERS.find(f => f.id === taxon);
+                  return (
+                    <div key={taxon} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 3 }}>
+                      <span>{filter?.icon || '📍'}</span>
+                      <span style={{ flex: 1 }}>{filter?.name || taxon}</span>
+                      <span style={{ fontWeight: 500 }}>{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Recent observations */}
+              <h4 style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>Recent observations:</h4>
+              {selectedCell.features.slice(0, 5).map((f, i) => (
+                <div key={i} style={{ 
+                  display: 'flex', alignItems: 'center', gap: 6, 
+                  padding: '4px 0', borderBottom: i < 4 ? '1px solid #eee' : 'none',
+                  fontSize: 11
+                }}>
+                  {f.properties.photo_url && (
+                    <img src={f.properties.photo_url} alt="" style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'cover' }} />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {f.properties.species || 'Unknown'}
+                    </div>
+                    <div style={{ color: '#999', fontSize: 10 }}>{f.properties.observed_on}</div>
+                  </div>
+                </div>
+              ))}
+              
+              {selectedCell.count > 5 && (
+                <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>
+                  +{selectedCell.count - 5} more observations
+                </div>
+              )}
+            </div>
+          </Popup>
+        )}
+
+        {/* Single Feature Popup */}
         {selectedFeature && (
           <Popup
             latitude={selectedFeature.geometry.coordinates[1]}
@@ -266,7 +385,7 @@ const DiscoveryMap: React.FC = () => {
           >
             <div style={{ padding: 4 }}>
               <h3 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 600 }}>
-                {selectedFeature.properties.name || selectedFeature.properties.species || 'Unknown'}
+                {selectedFeature.properties.species || 'Unknown'}
               </h3>
               {selectedFeature.properties.scientific_name && (
                 <p style={{ margin: '0 0 6px', fontSize: 12, fontStyle: 'italic', color: '#666' }}>
@@ -279,16 +398,10 @@ const DiscoveryMap: React.FC = () => {
               {selectedFeature.properties.observed_on && (
                 <p style={{ margin: '3px 0', fontSize: 11, color: '#666' }}>📅 {selectedFeature.properties.observed_on}</p>
               )}
-              {selectedFeature.properties.user && (
-                <p style={{ margin: '3px 0', fontSize: 11, color: '#666' }}>👤 {selectedFeature.properties.user}</p>
-              )}
-              <p style={{ margin: '6px 0 0', fontSize: 10, color: '#999' }}>
-                Source: {selectedFeature.properties.source || selectedFeature.properties.layer}
-              </p>
               {selectedFeature.properties.url && (
                 <a href={selectedFeature.properties.url} target="_blank" rel="noopener noreferrer" 
                    style={{ display: 'block', marginTop: 6, fontSize: 12, color: '#2563eb' }}>
-                  View details →
+                  View on iNaturalist →
                 </a>
               )}
             </div>
@@ -315,6 +428,33 @@ const DiscoveryMap: React.FC = () => {
 
         {layerPanelOpen && (
           <div style={{ overflowY: 'auto', padding: 10 }}>
+            {/* View Mode Toggle */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+              <button
+                onClick={() => setViewMode('grid')}
+                style={{
+                  flex: 1, padding: '6px 10px', borderRadius: 6, border: 'none',
+                  backgroundColor: viewMode === 'grid' ? '#22c55e' : '#f3f4f6',
+                  color: viewMode === 'grid' ? 'white' : '#666',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 500,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4
+                }}
+              >
+                <Grid3X3 size={14} /> Grid
+              </button>
+              <button
+                onClick={() => setViewMode('points')}
+                style={{
+                  flex: 1, padding: '6px 10px', borderRadius: 6, border: 'none',
+                  backgroundColor: viewMode === 'points' ? '#22c55e' : '#f3f4f6',
+                  color: viewMode === 'points' ? 'white' : '#666',
+                  cursor: 'pointer', fontSize: 11, fontWeight: 500,
+                }}
+              >
+                📍 Points
+              </button>
+            </div>
+          
             {/* Map Layers */}
             <h4 style={{ fontSize: 10, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase' }}>Map Layers</h4>
             {layers.map(layer => (
@@ -344,9 +484,32 @@ const DiscoveryMap: React.FC = () => {
               </div>
             ))}
 
+            {/* Legend */}
+            {viewMode === 'grid' && (
+              <div style={{ marginTop: 12, padding: 10, backgroundColor: '#f9fafb', borderRadius: 6 }}>
+                <h4 style={{ fontSize: 10, color: '#6b7280', marginBottom: 6 }}>DENSITY</h4>
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {[
+                    { color: '#86efac', label: '1-4' },
+                    { color: '#22c55e', label: '5-9' },
+                    { color: '#84cc16', label: '10-19' },
+                    { color: '#f59e0b', label: '20-29' },
+                    { color: '#ea580c', label: '30-49' },
+                    { color: '#dc2626', label: '50+' },
+                  ].map(l => (
+                    <div key={l.color} style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ width: '100%', height: 8, backgroundColor: l.color, borderRadius: 2 }} />
+                      <div style={{ fontSize: 8, color: '#666', marginTop: 2 }}>{l.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Stats */}
             <div style={{ marginTop: 12, padding: 10, backgroundColor: '#f3f4f6', borderRadius: 6, fontSize: 11 }}>
-              📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> visible
+              📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> observations
+              {viewMode === 'grid' && <span> in <strong>{gridCells.length}</strong> cells</span>}
               {loading && <div style={{ color: '#666', marginTop: 4 }}>{loadingProgress || 'Loading...'}</div>}
             </div>
           </div>
