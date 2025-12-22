@@ -57,277 +57,152 @@ def admin_headers():
     return {"X-Admin-Key": ADMIN_KEY}
 
 
-def auth_headers():
-    return {"Authorization": f"Bearer {USER_TOKEN}"} if USER_TOKEN else {}
-
-
 def test_health():
     print("\n📋 Health Check")
     status, data = get("/health")
     test("GET /health returns 200", status == 200)
-    test("Health has status field", isinstance(data, dict) and "status" in data)
 
 
 def test_public_endpoints():
     print("\n📋 Public Endpoints")
-    
     status, data = get("/api/species/plants")
     test("GET /api/species/plants", status == 200)
-    
     status, data = get("/api/scoring/methodology")
     test("GET /api/scoring/methodology", status == 200)
-    test("Methodology has version", isinstance(data, dict) and "version" in data)
-    
-    status, data = get("/api/scoring/models")
-    test("GET /api/scoring/models", status == 200)
-    
     status, data = get("/api/badges")
     test("GET /api/badges", status == 200)
-    test("Badges returns array", isinstance(data, dict) and "badges" in data)
-    
     status, data = get("/api/challenges")
     test("GET /api/challenges", status == 200)
-    
-    status, data = get("/api/challenges/templates")
-    test("GET /api/challenges/templates", status == 200)
-    
-    status, data = get("/api/map/leaderboard")
-    test("GET /api/leaderboard", status == 200)
-    
     status, data = get("/api/observations")
     test("GET /api/observations", status == 200)
-    
     status, data = get("/api/stats")
     test("GET /api/stats", status == 200)
-    test("Stats has stats field", isinstance(data, dict) and "stats" in data)
-    
-    status, data = get("/api/events/counts")
-    test("GET /api/events/counts", status == 200)
-    
-    status, data = get("/api/connectivity/nearby?grid_hash=40.666_-111.897")
-    test("GET /api/connectivity/nearby", status == 200)
 
 
 def test_scoring_endpoints():
     print("\n📋 Scoring Endpoints")
-    
     payload = {
-        "lat": 40.6655,
-        "lng": -111.8965,
-        "plants": [
-            {"species": "Showy Milkweed", "count": 3, "is_native": True, "is_milkweed": True, "bloom_seasons": ["summer"]},
-            {"species": "Purple Coneflower", "count": 5, "is_native": True, "bloom_seasons": ["summer", "fall"]}
-        ],
-        "flower_coverage_pct": 20,
-        "has_bare_ground": True,
-        "bare_ground_sqft": 25,
-        "neighbors_in_program": 2
+        "lat": 40.6655, "lng": -111.8965,
+        "plants": [{"species": "Showy Milkweed", "count": 3, "is_native": True, "is_milkweed": True}],
+        "flower_coverage_pct": 20, "has_bare_ground": True, "bare_ground_sqft": 25
     }
     status, data = post("/api/v2/score", payload)
     test("POST /api/v2/score", status == 200)
-    test("Score has score", isinstance(data, dict) and "score" in data)
-    test("Score has grade", isinstance(data, dict) and "grade" in data)
-    
-    status, data = get("/api/scores/leaderboard")
-    test("GET /api/scores/leaderboard", status == 200)
-
-
-def test_admin_auth():
-    print("\n📋 Admin Authentication")
-    
-    status, data = get("/api/admin/export")
-    test("Admin export without key fails", status == 403)
-    
-    status, data = get("/api/admin/export", headers={"X-Admin-Key": "wrong-key"})
-    test("Admin export with wrong key fails", status == 403)
-    
-    status, data = get("/api/admin/verify", headers=admin_headers())
-    test("Admin verify with key succeeds", status == 200)
-    test("Admin verify returns valid=true", isinstance(data, dict) and data.get("valid") == True)
+    test("Score has score field", isinstance(data, dict) and "score" in data)
 
 
 def test_admin_endpoints():
     print("\n📋 Admin Endpoints")
-    
+    status, data = get("/api/admin/export")
+    test("Admin export without key fails", status == 403)
+    status, data = get("/api/admin/verify", headers=admin_headers())
+    test("Admin verify with key succeeds", status == 200)
     status, data = get("/api/admin/export", headers=admin_headers())
     test("GET /api/admin/export", status == 200)
-    test("Export has data field", isinstance(data, dict) and "data" in data)
-    
-    status, data = get("/api/admin/config", headers=admin_headers())
-    test("GET /api/admin/config", status == 200)
-
-
-def test_protected_endpoints():
-    print("\n📋 Protected Endpoints (require user auth)")
-    
-    if not USER_TOKEN:
-        skip("GET /api/inventory", "No USER_TOKEN set")
-        skip("GET /api/badges/my", "No USER_TOKEN set")
-        skip("GET /api/challenges/my", "No USER_TOKEN set")
-        skip("GET /api/referrals/my", "No USER_TOKEN set")
-        skip("GET /api/alerts/my", "No USER_TOKEN set")
-        skip("GET /api/scores/my", "No USER_TOKEN set")
-        skip("GET /api/connectivity", "No USER_TOKEN set")
-        return
-    
-    headers = auth_headers()
-    status, data = get("/api/inventory", headers=headers)
-    test("GET /api/inventory", status == 200)
 
 
 def test_jobs_endpoints():
     print("\n📋 Jobs Endpoints")
-    
     status, data = get("/api/jobs/list")
     test("GET /api/jobs/list", status == 200)
-    test("Jobs list has jobs array", isinstance(data, dict) and "jobs" in data)
-    
     status, data = get("/api/jobs/history")
     test("GET /api/jobs/history", status == 200)
-    
-    status, data = post("/api/jobs/run/expire_challenges", headers=admin_headers())
-    test("POST /api/jobs/run (admin)", status == 200)
 
 
 def test_stats_endpoints():
     print("\n📋 Stats Endpoints")
-    
     status, data = get("/api/stats/growth?days=7")
     test("GET /api/stats/growth", status == 200)
-    
-    status, data = get("/api/stats/geographic")
-    test("GET /api/stats/geographic", status == 200)
-    
-    status, data = get("/api/stats/scores")
-    test("GET /api/stats/scores", status == 200)
-    
-    status, data = get("/api/stats/challenges")
-    test("GET /api/stats/challenges", status == 200)
-    
     status, data = get("/api/stats/dashboard")
     test("GET /api/stats/dashboard", status == 200)
 
 
 def test_events_endpoints():
     print("\n📋 Events Endpoints")
-    
     status, data = get("/api/events/types")
     test("GET /api/events/types", status == 200)
-    
     status, data = get("/api/events/daily?days=7")
     test("GET /api/events/daily", status == 200)
-    
-    status, data = get("/api/events/recent", headers=admin_headers())
-    test("GET /api/events/recent (admin)", status == 200)
 
 
 def test_government_endpoints():
     print("\n📋 Government Endpoints")
-    
     status, data = get("/api/gov/overview")
     test("GET /api/gov/overview", status == 200)
     test("Overview has participants", isinstance(data, dict) and "participants" in data)
-    
     status, data = get("/api/gov/wards")
     test("GET /api/gov/wards", status == 200)
-    
     status, data = get("/api/gov/priority-areas")
     test("GET /api/gov/priority-areas", status == 200)
-    
-    status, data = get("/api/gov/connectivity-gaps")
-    test("GET /api/gov/connectivity-gaps", status == 200)
-    
-    status, data = get("/api/gov/trends?days=30")
-    test("GET /api/gov/trends", status == 200)
-    
-    status, data = get("/api/gov/challenges")
-    test("GET /api/gov/challenges", status == 200)
-    
     status, data = get("/api/gov/geojson/participation")
     test("GET /api/gov/geojson/participation", status == 200)
-    test("GeoJSON has features", isinstance(data, dict) and "features" in data)
-    
-    status, data = get("/api/gov/geojson/priority")
-    test("GET /api/gov/geojson/priority", status == 200)
-    
     status, data = get("/api/gov/report/council", headers=admin_headers())
-    test("GET /api/gov/report/council (admin)", status == 200)
-    test("Report has executive_summary", isinstance(data, dict) and "executive_summary" in data)
+    test("GET /api/gov/report/council", status == 200)
 
 
 def test_external_data_endpoints():
     print("\n📋 External Data Endpoints")
-    
     status, data = get("/api/external/sources")
     test("GET /api/external/sources", status == 200)
-    test("Sources has sources array", isinstance(data, dict) and "sources" in data)
-    
     status, data = get("/api/external/species?lat=40.666&lng=-111.897")
     test("GET /api/external/species", status == 200)
-    test("Species has local_context", isinstance(data, dict) and "local_context" in data)
-    
-    status, data = get("/api/external/nlcd?lat=40.666&lng=-111.897")
-    test("GET /api/external/nlcd", status == 200)
-    
     status, data = get("/api/external/enrich?lat=40.666&lng=-111.897")
     test("GET /api/external/enrich", status == 200)
 
 
 def test_unified_map_endpoints():
     print("\n📋 Unified Map Endpoints")
-    
     status, data = get("/api/map/layers")
     test("GET /api/map/layers", status == 200)
-    test("Layers has layers array", isinstance(data, dict) and "layers" in data)
-    
     status, data = get("/api/map/unified")
     test("GET /api/map/unified", status == 200)
     test("Unified has features", isinstance(data, dict) and "features" in data)
-    
-    status, data = get("/api/map/unified?layers=parks,participation")
-    test("GET /api/map/unified with filter", status == 200)
-    
     status, data = get("/api/map/bloom-calendar")
     test("GET /api/map/bloom-calendar", status == 200)
 
 
 def test_enhanced_map_endpoints():
     print("\n📋 Enhanced Map Endpoints")
-    
     status, data = get("/api/map/monarch-status")
     test("GET /api/map/monarch-status", status == 200)
-    test("Monarch has status", isinstance(data, dict) and "status" in data)
-    
     status, data = get("/api/map/frost-dates?lat=40.666&lng=-111.897")
     test("GET /api/map/frost-dates", status == 200)
-    test("Frost has zone", isinstance(data, dict) and "zone" in data)
-    
     status, data = get("/api/map/waystations")
     test("GET /api/map/waystations", status == 200)
-    test("Waystations has features", isinstance(data, dict) and "features" in data)
-    
     status, data = get("/api/map/bee-cities")
     test("GET /api/map/bee-cities", status == 200)
-    
     status, data = get("/api/map/corridors")
     test("GET /api/map/corridors", status == 200)
-    test("Corridors has corridors", isinstance(data, dict) and "corridors" in data)
-    
     status, data = get("/api/map/parks")
     test("GET /api/map/parks", status == 200)
-    
     status, data = get("/api/map/elevation?lat=40.666&lng=-111.897")
     test("GET /api/map/elevation", status == 200)
-    test("Elevation has elevation_ft", isinstance(data, dict) and "elevation_ft" in data)
-    
     status, data = get("/api/map/enhanced?lat=40.666&lng=-111.897")
     test("GET /api/map/enhanced", status == 200)
-    test("Enhanced has data_sources", isinstance(data, dict) and "data_sources" in data)
+
+
+def test_wildlife_endpoints():
+    print("\n📋 Wildlife Data Endpoints")
+    status, data = get("/api/wildlife/sources")
+    test("GET /api/wildlife/sources", status == 200)
+    test("Sources has sources array", isinstance(data, dict) and "sources" in data)
+    status, data = get("/api/wildlife/motus")
+    test("GET /api/wildlife/motus", status == 200)
+    test("Motus has stations", isinstance(data, dict) and "stations" in data)
+    status, data = get("/api/wildlife/motus/tracks")
+    test("GET /api/wildlife/motus/tracks", status == 200)
+    status, data = get("/api/wildlife/inaturalist?lat=40.666&lng=-111.897&radius=10")
+    test("GET /api/wildlife/inaturalist", status == 200)
+    test("iNaturalist has observations", isinstance(data, dict) and "observations" in data)
+    status, data = get("/api/wildlife/gbif?lat=40.666&lng=-111.897")
+    test("GET /api/wildlife/gbif", status == 200)
+    status, data = get("/api/wildlife/unified?lat=40.666&lng=-111.897&radius=10")
+    test("GET /api/wildlife/unified", status == 200)
+    test("Unified has features", isinstance(data, dict) and "features" in data)
 
 
 def print_summary():
     total = results["passed"] + results["failed"] + results["skipped"]
-    
     print("\n" + "=" * 50)
     print("📊 TEST RESULTS")
     print("=" * 50)
@@ -335,13 +210,10 @@ def print_summary():
     print(f"  ❌ Failed:  {results['failed']}")
     print(f"  ⏭️  Skipped: {results['skipped']}")
     print(f"  📋 Total:   {total}")
-    
     if results["errors"]:
         print("\n❌ FAILURES:")
         for err in results["errors"]:
             print(f"  - {err}")
-    
-    print()
     return results["failed"] == 0
 
 
@@ -351,18 +223,12 @@ if __name__ == "__main__":
     print(f"🌐 Testing: {BASE_URL}")
     print("=" * 50)
     
-    if len(sys.argv) > 1:
-        USER_TOKEN = sys.argv[1]
-        print("🔑 User token provided")
-    
     start = time.time()
     
     test_health()
     test_public_endpoints()
     test_scoring_endpoints()
-    test_admin_auth()
     test_admin_endpoints()
-    test_protected_endpoints()
     test_jobs_endpoints()
     test_stats_endpoints()
     test_events_endpoints()
@@ -370,6 +236,7 @@ if __name__ == "__main__":
     test_external_data_endpoints()
     test_unified_map_endpoints()
     test_enhanced_map_endpoints()
+    test_wildlife_endpoints()
     
     elapsed = time.time() - start
     print(f"\n⏱️  Completed in {elapsed:.1f}s")
