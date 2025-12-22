@@ -22,3 +22,4 @@ curl -X POST http://localhost:5001/api/score/homeowner \
 ## Key Discovery
 September is peak pollinator month in Utah (90 butterfly + 108 bee observations vs 3-4 in summer).
 # Rebuild trigger Sun Dec 21 16:28:37 MST 2025
+# External data Sun Dec 21 17:35:32 MST 2025
