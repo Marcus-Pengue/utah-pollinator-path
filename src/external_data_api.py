@@ -105,11 +105,9 @@ IMPERVIOUS_BY_CLASS = {
 async def nlcd_get_land_cover(lat, lng):
     """
     Get NLCD land cover class for a point.
-    Uses MRLC WMS GetFeatureInfo.
+    Uses MRLC WMS GetFeatureInfo with text/plain response.
     """
-    # Build WMS GetFeatureInfo request
-    # Convert lat/lng to bbox
-    buffer = 0.0001  # ~10m buffer
+    buffer = 0.001
     bbox = f"{lng-buffer},{lat-buffer},{lng+buffer},{lat+buffer}"
     
     params = {
@@ -118,13 +116,13 @@ async def nlcd_get_land_cover(lat, lng):
         "REQUEST": "GetFeatureInfo",
         "LAYERS": "NLCD_2021_Land_Cover_L48",
         "QUERY_LAYERS": "NLCD_2021_Land_Cover_L48",
-        "INFO_FORMAT": "application/json",
+        "INFO_FORMAT": "text/plain",
         "SRS": "EPSG:4326",
         "BBOX": bbox,
-        "WIDTH": 10,
-        "HEIGHT": 10,
-        "X": 5,
-        "Y": 5,
+        "WIDTH": "256",
+        "HEIGHT": "256",
+        "X": "128",
+        "Y": "128",
     }
     
     ssl_ctx = ssl.create_default_context(cafile=certifi.where())
@@ -132,17 +130,22 @@ async def nlcd_get_land_cover(lat, lng):
         async with aiohttp.ClientSession() as session:
             async with session.get(NLCD_WMS, params=params, ssl=ssl_ctx, timeout=10) as resp:
                 if resp.status == 200:
-                    data = await resp.json()
-                    if data.get("features"):
-                        value = data["features"][0]["properties"].get("GRAY_INDEX")
-                        land_class = NLCD_CLASSES.get(value, {"name": "Unknown", "habitat_potential": 30})
-                        return {
-                            "source": "nlcd_2021",
-                            "class_code": value,
-                            "class_name": land_class["name"],
-                            "habitat_potential": land_class["habitat_potential"],
-                            "estimated_impervious_pct": IMPERVIOUS_BY_CLASS.get(value, 30),
-                        }
+                    text = await resp.text()
+                    # Parse "PALETTE_INDEX = 24.0" from response
+                    for line in text.split("\n"):
+                        if "PALETTE_INDEX" in line:
+                            try:
+                                value = int(float(line.split("=")[1].strip()))
+                                land_class = NLCD_CLASSES.get(value, {"name": "Unknown", "habitat_potential": 30})
+                                return {
+                                    "source": "nlcd_2021",
+                                    "class_code": value,
+                                    "class_name": land_class["name"],
+                                    "habitat_potential": land_class["habitat_potential"],
+                                    "estimated_impervious_pct": IMPERVIOUS_BY_CLASS.get(value, 30),
+                                }
+                            except:
+                                pass
     except Exception as e:
         print(f"NLCD error: {e}")
     
@@ -151,19 +154,20 @@ async def nlcd_get_land_cover(lat, lng):
 
 async def nlcd_get_impervious(lat, lng):
     """Get NLCD impervious surface percentage for a point."""
+    buffer = 0.001
     params = {
         "SERVICE": "WMS",
         "VERSION": "1.1.1",
         "REQUEST": "GetFeatureInfo",
         "LAYERS": "NLCD_2021_Impervious_L48",
         "QUERY_LAYERS": "NLCD_2021_Impervious_L48",
-        "INFO_FORMAT": "application/json",
+        "INFO_FORMAT": "text/plain",
         "SRS": "EPSG:4326",
-        "BBOX": f"{lng-0.0001},{lat-0.0001},{lng+0.0001},{lat+0.0001}",
-        "WIDTH": 10,
-        "HEIGHT": 10,
-        "X": 5,
-        "Y": 5,
+        "BBOX": f"{lng-buffer},{lat-buffer},{lng+buffer},{lat+buffer}",
+        "WIDTH": "256",
+        "HEIGHT": "256",
+        "X": "128",
+        "Y": "128",
     }
     
     ssl_ctx = ssl.create_default_context(cafile=certifi.where())
@@ -171,13 +175,17 @@ async def nlcd_get_impervious(lat, lng):
         async with aiohttp.ClientSession() as session:
             async with session.get(NLCD_WMS, params=params, ssl=ssl_ctx, timeout=10) as resp:
                 if resp.status == 200:
-                    data = await resp.json()
-                    if data.get("features"):
-                        value = data["features"][0]["properties"].get("GRAY_INDEX", 0)
-                        return {
-                            "source": "nlcd_2021_impervious",
-                            "impervious_pct": value,
-                        }
+                    text = await resp.text()
+                    for line in text.split("\n"):
+                        if "PALETTE_INDEX" in line or "GRAY_INDEX" in line:
+                            try:
+                                value = int(float(line.split("=")[1].strip()))
+                                return {
+                                    "source": "nlcd_2021_impervious",
+                                    "impervious_pct": value,
+                                }
+                            except:
+                                pass
     except Exception as e:
         print(f"NLCD impervious error: {e}")
     
@@ -198,42 +206,23 @@ EPA_LAYERS = {
 
 async def epa_get_pollinator_potential(lat, lng):
     """
-    Get EPA EnviroAtlas pollinator habitat potential score.
-    Scale: 0-100 (higher = better potential habitat)
+    Estimate pollinator habitat potential based on NLCD land cover.
+    EPA EnviroAtlas pollinator layer not publicly accessible.
     """
-    url = f"{EPA_ENVIROATLAS_WMS}/Supplemental/PollinatorHabitatPotential/MapServer/identify"
+    # Get land cover and derive potential from that
+    land_cover = await nlcd_get_land_cover(lat, lng)
     
-    params = {
-        "geometry": f"{lng},{lat}",
-        "geometryType": "esriGeometryPoint",
-        "sr": 4326,
-        "layers": "all",
-        "tolerance": 5,
-        "mapExtent": f"{lng-0.01},{lat-0.01},{lng+0.01},{lat+0.01}",
-        "imageDisplay": "100,100,96",
-        "returnGeometry": "false",
-        "f": "json",
-    }
+    if land_cover.get("habitat_potential"):
+        score = land_cover["habitat_potential"]
+        return {
+            "source": "derived_from_nlcd",
+            "layer": "estimated_pollinator_potential",
+            "score": score,
+            "interpretation": _interpret_epa_score(score),
+            "based_on": land_cover.get("class_name"),
+        }
     
-    ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, ssl=ssl_ctx, timeout=15) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    if data.get("results"):
-                        attrs = data["results"][0].get("attributes", {})
-                        score = attrs.get("Pixel Value") or attrs.get("Value")
-                        return {
-                            "source": "epa_enviroatlas",
-                            "layer": "pollinator_habitat_potential",
-                            "score": score,
-                            "interpretation": _interpret_epa_score(score),
-                        }
-    except Exception as e:
-        print(f"EPA EnviroAtlas error: {e}")
-    
-    return {"source": "epa_enviroatlas", "available": False}
+    return {"source": "epa_enviroatlas", "available": False, "note": "Using NLCD-derived estimate"}
 
 
 def _interpret_epa_score(score):
@@ -254,39 +243,24 @@ def _interpret_epa_score(score):
 
 
 async def epa_get_green_space(lat, lng):
-    """Get EPA percent green space within census block."""
-    url = f"{EPA_ENVIROATLAS_WMS}/Supplemental/PctGreenSpace/MapServer/identify"
+    """
+    Estimate green space based on NLCD land cover.
+    EPA percent green space layer not publicly accessible.
+    """
+    land_cover = await nlcd_get_land_cover(lat, lng)
+    impervious = await nlcd_get_impervious(lat, lng)
     
-    params = {
-        "geometry": f"{lng},{lat}",
-        "geometryType": "esriGeometryPoint",
-        "sr": 4326,
-        "layers": "all",
-        "tolerance": 5,
-        "mapExtent": f"{lng-0.01},{lat-0.01},{lng+0.01},{lat+0.01}",
-        "imageDisplay": "100,100,96",
-        "returnGeometry": "false",
-        "f": "json",
+    # Estimate green space from impervious
+    imp_pct = impervious.get("impervious_pct", 30)
+    green_pct = max(0, 100 - imp_pct)
+    
+    return {
+        "source": "derived_from_nlcd",
+        "layer": "estimated_green_space",
+        "green_space_pct": green_pct,
+        "impervious_pct": imp_pct,
+        "land_cover": land_cover.get("class_name"),
     }
-    
-    ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params, ssl=ssl_ctx, timeout=15) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    if data.get("results"):
-                        attrs = data["results"][0].get("attributes", {})
-                        pct = attrs.get("Pixel Value") or attrs.get("PctGreen") or attrs.get("Value")
-                        return {
-                            "source": "epa_enviroatlas",
-                            "layer": "percent_green_space",
-                            "green_space_pct": pct,
-                        }
-    except Exception as e:
-        print(f"EPA green space error: {e}")
-    
-    return {"source": "epa_enviroatlas", "available": False}
 
 
 # ============ USGS GAP - Species Range Maps ============
