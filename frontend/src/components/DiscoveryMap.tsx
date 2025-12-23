@@ -977,6 +977,7 @@ const DiscoveryMap: React.FC = () => {
         observations={[]}
         onEditGarden={() => { setShowDashboard(false); setRegisterMode(true); }}
         onStartCapture={() => { setShowDashboard(false); setShowObservationCapture(true); }}
+      onUpdateGarden={(data) => setUserGardenData(data)}
       />
 
       

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import INaturalistSync from './INaturalistSync';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
@@ -14,6 +15,7 @@ interface UserDashboardProps {
   observations: SyncedObservation[];
   onEditGarden: () => void;
   onStartCapture: () => void;
+  onUpdateGarden?: (data: any) => void;
 }
 
 interface GardenData {

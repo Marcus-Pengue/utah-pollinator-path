@@ -1,401 +1,170 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Check, AlertCircle, ExternalLink, Leaf, Bug, Bird } from 'lucide-react';
-import { isWithinPropertyRadius } from './ConnectivityScoring';
+import { Search, Link2, RefreshCw, ExternalLink, Check, X, Camera, MapPin } from 'lucide-react';
+import { api } from '../api/client';
 
-interface iNaturalistSyncProps {
-  propertyLat: number;
-  propertyLng: number;
-  radiusMeters?: number;
-  onSyncComplete: (observations: SyncedObservation[]) => void;
-  existingObservations?: SyncedObservation[];
+interface INaturalistUser {
+  id: number;
+  login: string;
+  name: string;
+  icon: string;
+  observations_count: number;
 }
 
-export interface SyncedObservation {
-  id: string;
-  inat_id: number;
+interface Observation {
+  id: number;
   species: string;
-  common_name: string;
-  taxon: string;
+  scientific_name: string;
+  iconic_taxon: string;
   observed_on: string;
-  lat: number;
-  lng: number;
-  photo_url?: string;
-  distance_from_property: number;
+  place_guess: string;
   quality_grade: string;
+  coordinates: [number, number];
+  photo_url: string | null;
+  url: string;
 }
 
-const TAXON_ICONS: Record<string, React.ReactNode> = {
-  Plantae: <Leaf size={14} color="#22c55e" />,
-  Insecta: <Bug size={14} color="#f59e0b" />,
-  Aves: <Bird size={14} color="#3b82f6" />,
-  Mammalia: '🦊',
-  Reptilia: '🦎',
-  Amphibia: '🐸',
-  Fungi: '🍄',
-  Arachnida: '🕷️',
-};
+interface INaturalistSyncProps {
+  gardenId: string;
+  gardenLat?: number;
+  gardenLng?: number;
+  linkedUsername?: string;
+  onSync: (observations: Observation[]) => void;
+  onLink: (username: string, userId: number) => void;
+}
 
-const INaturalistSync: React.FC<iNaturalistSyncProps> = ({
-  propertyLat,
-  propertyLng,
-  radiusMeters = 500,
-  onSyncComplete,
-  existingObservations = []
+const INaturalistSync: React.FC<INaturalistSyncProps> = ({
+  gardenId, gardenLat, gardenLng, linkedUsername, onSync, onLink
 }) => {
-  const [username, setUsername] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<INaturalistUser[]>([]);
+  const [searching, setSearching] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [observations, setObservations] = useState<Observation[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [syncedObs, setSyncedObs] = useState<SyncedObservation[]>(existingObservations);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [showResults, setShowResults] = useState(false);
-  const [totalFound, setTotalFound] = useState(0);
-  const [withinRadius, setWithinRadius] = useState(0);
+  const [radius, setRadius] = useState(1);
 
-  // Calculate distance helper
-  const getDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-    const R = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  useEffect(() => {
+    if (linkedUsername) syncObservations(linkedUsername);
+  }, [linkedUsername]);
+
+  const searchUsers = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const res = await api.get('/api/inaturalist/search?username=' + encodeURIComponent(searchQuery));
+      setSearchResults(res.data.users || []);
+    } catch (err) {
+      setError('Failed to search users');
+    }
+    setSearching(false);
   };
 
-  const syncFromiNaturalist = async () => {
-    if (!username.trim()) {
-      setError('Please enter your iNaturalist username');
-      return;
+  const linkAccount = async (user: INaturalistUser) => {
+    try {
+      await api.post('/api/gardens/' + gardenId + '/link-inaturalist', { username: user.login, user_id: user.id });
+      onLink(user.login, user.id);
+      setSearchResults([]);
+      setSearchQuery('');
+      syncObservations(user.login);
+    } catch (err) {
+      setError('Failed to link account');
     }
+  };
 
+  const syncObservations = async (username: string) => {
     setSyncing(true);
     setError(null);
-    setShowResults(false);
-
     try {
-      // Fetch user's observations from iNaturalist API
-      // We search within a bounding box around the property to limit results
-      const boxSize = 0.01; // ~1km box
-      const params = new URLSearchParams({
-        user_login: username.trim(),
-        swlat: (propertyLat - boxSize).toString(),
-        swlng: (propertyLng - boxSize).toString(),
-        nelat: (propertyLat + boxSize).toString(),
-        nelng: (propertyLng + boxSize).toString(),
-        per_page: '200',
-        order_by: 'observed_on',
-        order: 'desc',
-      });
-
-      const response = await fetch(
-        `https://api.inaturalist.org/v1/observations?${params}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch from iNaturalist');
-      }
-
-      const data = await response.json();
-      const allObs = data.results || [];
-      setTotalFound(allObs.length);
-
-      // Filter to only observations within the property radius
-      const validObs: SyncedObservation[] = [];
-
-      for (const obs of allObs) {
-        if (!obs.location) continue;
-
-        const [lat, lng] = obs.location.split(',').map(Number);
-        const distance = getDistance(propertyLat, propertyLng, lat, lng);
-
-        if (distance <= radiusMeters) {
-          validObs.push({
-            id: `inat_sync_${obs.id}`,
-            inat_id: obs.id,
-            species: obs.taxon?.name || 'Unknown',
-            common_name: obs.taxon?.preferred_common_name || obs.taxon?.name || 'Unknown',
-            taxon: obs.taxon?.iconic_taxon_name || 'Unknown',
-            observed_on: obs.observed_on || obs.created_at,
-            lat,
-            lng,
-            photo_url: obs.photos?.[0]?.url?.replace('square', 'small'),
-            distance_from_property: Math.round(distance),
-            quality_grade: obs.quality_grade,
-          });
-        }
-      }
-
-      setWithinRadius(validObs.length);
-      setSyncedObs(validObs);
-      setLastSync(new Date().toISOString());
-      setShowResults(true);
-      onSyncComplete(validObs);
-
-    } catch (err: any) {
-      setError(err.message || 'Failed to sync with iNaturalist');
-    } finally {
-      setSyncing(false);
+      let url = '/api/inaturalist/observations?username=' + encodeURIComponent(username);
+      if (gardenLat && gardenLng) url += '&lat=' + gardenLat + '&lng=' + gardenLng + '&radius=' + radius;
+      const res = await api.get(url);
+      setObservations(res.data.observations || []);
+      onSync(res.data.observations || []);
+    } catch (err) {
+      setError('Failed to sync observations');
     }
+    setSyncing(false);
   };
-
-  // Calculate bonus points from synced observations
-  const calculateObservationBonus = (): number => {
-    if (syncedObs.length === 0) return 0;
-
-    let bonus = 0;
-    const taxonCounts: Record<string, number> = {};
-    const speciesSet = new Set<string>();
-
-    syncedObs.forEach(obs => {
-      taxonCounts[obs.taxon] = (taxonCounts[obs.taxon] || 0) + 1;
-      speciesSet.add(obs.species);
-    });
-
-    // Points per observation (capped)
-    bonus += Math.min(syncedObs.length * 2, 30);
-
-    // Diversity bonus
-    const taxonDiversity = Object.keys(taxonCounts).length;
-    if (taxonDiversity >= 5) bonus += 20;
-    else if (taxonDiversity >= 3) bonus += 10;
-
-    // Species richness bonus
-    if (speciesSet.size >= 20) bonus += 25;
-    else if (speciesSet.size >= 10) bonus += 15;
-    else if (speciesSet.size >= 5) bonus += 5;
-
-    // Research grade bonus
-    const researchGrade = syncedObs.filter(o => o.quality_grade === 'research').length;
-    if (researchGrade >= 10) bonus += 15;
-    else if (researchGrade >= 5) bonus += 8;
-
-    return bonus;
-  };
-
-  const observationBonus = calculateObservationBonus();
 
   return (
-    <div style={{
-      backgroundColor: '#fefce8',
-      border: '1px solid #fde047',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <img 
-          src="https://static.inaturalist.org/sites/1-logo.svg" 
-          alt="iNaturalist" 
-          style={{ height: 20 }}
-        />
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Sync Your Observations</span>
+    <div style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: 12, backgroundColor: '#f0fdf4', borderRadius: 10, border: '1px solid #86efac' }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#166534' }}>iNaturalist Sync</div>
+          <div style={{ fontSize: 11, color: '#15803d' }}>{linkedUsername ? 'Linked to @' + linkedUsername : 'Connect your account'}</div>
+        </div>
+        {linkedUsername && <Check size={20} color="#22c55e" />}
       </div>
 
-      <p style={{ fontSize: 12, color: '#713f12', marginBottom: 12 }}>
-        Link your iNaturalist account to get credit for wildlife observations 
-        within {radiusMeters}m of your property. Only <strong>your observations</strong> near 
-        your registered garden location will count.
-      </p>
+      {!linkedUsername && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>Link your iNaturalist account to sync observations</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && searchUsers()} placeholder="Enter iNaturalist username" style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 }} />
+            <button onClick={searchUsers} disabled={searching} style={{ padding: '10px 16px', borderRadius: 8, border: 'none', backgroundColor: '#22c55e', color: 'white', cursor: 'pointer' }}>
+              <Search size={16} />
+            </button>
+          </div>
+          {searchResults.map(user => (
+            <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, marginTop: 8, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>@{user.login}</div>
+                <div style={{ fontSize: 12, color: '#666' }}>{user.observations_count} observations</div>
+              </div>
+              <button onClick={() => linkAccount(user)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', backgroundColor: '#22c55e', color: 'white', cursor: 'pointer' }}>
+                <Link2 size={14} /> Link
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Username Input */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Your iNaturalist username"
-          style={{
-            flex: 1,
-            padding: '10px 12px',
-            borderRadius: 8,
-            border: '1px solid #fde047',
-            fontSize: 14,
-          }}
-        />
-        <button
-          onClick={syncFromiNaturalist}
-          disabled={syncing}
-          style={{
-            padding: '10px 16px',
-            borderRadius: 8,
-            border: 'none',
-            backgroundColor: '#84cc16',
-            color: 'white',
-            fontWeight: 600,
-            cursor: syncing ? 'wait' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <RefreshCw size={16} className={syncing ? 'spin' : ''} />
-          {syncing ? 'Syncing...' : 'Sync'}
-        </button>
-      </div>
+      {linkedUsername && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <select value={radius} onChange={(e) => setRadius(Number(e.target.value))} style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #ddd' }}>
+              <option value={0.5}>500m</option>
+              <option value={1}>1 km</option>
+              <option value={5}>5 km</option>
+            </select>
+            <button onClick={() => syncObservations(linkedUsername)} disabled={syncing} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer' }}>
+              <RefreshCw size={16} /> {syncing ? 'Syncing...' : 'Sync'}
+            </button>
+          </div>
+          
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Your Observations ({observations.length})</div>
+          
+          {observations.length > 0 ? (
+            <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              {observations.map(obs => (
+                <a key={obs.id} href={obs.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, borderBottom: '1px solid #f3f4f6', textDecoration: 'none', color: 'inherit' }}>
+                  {obs.photo_url ? (
+                    <img src={obs.photo_url} alt="" style={{ width: 40, height: 40, borderRadius: 6, objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: 6, backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📷</div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{obs.species}</div>
+                    <div style={{ fontSize: 11, color: '#666' }}>{obs.observed_on}</div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: 30, backgroundColor: '#f9fafb', borderRadius: 8 }}>
+              <Camera size={32} color="#9ca3af" />
+              <div style={{ color: '#666', marginTop: 8 }}>No observations found nearby</div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Error Display */}
       {error && (
-        <div style={{
-          backgroundColor: '#fef2f2',
-          border: '1px solid #fecaca',
-          borderRadius: 8,
-          padding: 10,
-          fontSize: 12,
-          color: '#dc2626',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          marginBottom: 12
-        }}>
-          <AlertCircle size={14} />
-          {error}
+        <div style={{ marginTop: 12, padding: 10, backgroundColor: '#fef2f2', borderRadius: 6, color: '#dc2626', fontSize: 12 }}>
+          <X size={16} /> {error}
         </div>
       )}
-
-      {/* Sync Results */}
-      {showResults && (
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 12
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: 8
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#166534' }}>
-              <Check size={14} style={{ display: 'inline', marginRight: 4 }} />
-              Sync Complete!
-            </div>
-            <div style={{ fontSize: 11, color: '#666' }}>
-              {new Date(lastSync!).toLocaleString()}
-            </div>
-          </div>
-
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 1fr', 
-            gap: 8,
-            marginBottom: 12
-          }}>
-            <div style={{ 
-              backgroundColor: '#f0fdf4', 
-              padding: 8, 
-              borderRadius: 6,
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#166534' }}>
-                {withinRadius}
-              </div>
-              <div style={{ fontSize: 10, color: '#166534' }}>
-                Within {radiusMeters}m
-              </div>
-            </div>
-            <div style={{ 
-              backgroundColor: '#fef3c7', 
-              padding: 8, 
-              borderRadius: 6,
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#92400e' }}>
-                +{observationBonus}
-              </div>
-              <div style={{ fontSize: 10, color: '#92400e' }}>
-                Bonus Points
-              </div>
-            </div>
-          </div>
-
-          {totalFound > withinRadius && (
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
-              ℹ️ {totalFound - withinRadius} observations were outside the {radiusMeters}m radius 
-              and not counted.
-            </div>
-          )}
-
-          {/* Observation List */}
-          {syncedObs.length > 0 && (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
-                Your Property Observations:
-              </div>
-              <div style={{ maxHeight: 150, overflowY: 'auto' }}>
-                {syncedObs.slice(0, 10).map((obs, i) => (
-                  <div 
-                    key={obs.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 0',
-                      borderBottom: i < syncedObs.length - 1 ? '1px solid #eee' : 'none'
-                    }}
-                  >
-                    {obs.photo_url && (
-                      <img 
-                        src={obs.photo_url} 
-                        alt={obs.common_name}
-                        style={{ 
-                          width: 32, 
-                          height: 32, 
-                          borderRadius: 4,
-                          objectFit: 'cover'
-                        }}
-                      />
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ 
-                        fontSize: 12, 
-                        fontWeight: 500,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {TAXON_ICONS[obs.taxon] || '🌿'} {obs.common_name}
-                      </div>
-                      <div style={{ fontSize: 10, color: '#666' }}>
-                        {obs.distance_from_property}m away • {obs.observed_on?.split('T')[0]}
-                      </div>
-                    </div>
-                    {obs.quality_grade === 'research' && (
-                      <span style={{
-                        fontSize: 8,
-                        padding: '2px 4px',
-                        backgroundColor: '#22c55e',
-                        color: 'white',
-                        borderRadius: 4
-                      }}>
-                        RG
-                      </span>
-                    )}
-                  </div>
-                ))}
-                {syncedObs.length > 10 && (
-                  <div style={{ fontSize: 11, color: '#666', padding: '8px 0' }}>
-                    + {syncedObs.length - 10} more observations
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Link to create iNat account */}
-      <div style={{ fontSize: 11, color: '#713f12' }}>
-        Don't have an account?{' '}
-        <a 
-          href="https://www.inaturalist.org/signup" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          style={{ color: '#84cc16', display: 'inline-flex', alignItems: 'center', gap: 2 }}
-        >
-          Create one on iNaturalist <ExternalLink size={10} />
-        </a>
-      </div>
     </div>
   );
 };

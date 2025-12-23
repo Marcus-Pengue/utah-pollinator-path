@@ -1246,6 +1246,131 @@ def download_info():
     else:
         return jsonify({'error': 'Metadata not found'}), 404
 
+
+
+# ============ iNaturalist Sync ============
+
+@app.route('/api/inaturalist/search', methods=['GET'])
+def search_inaturalist_user():
+    """Search for iNaturalist user by username"""
+    username = request.args.get('username', '')
+    if not username:
+        return jsonify({'error': 'Username required'}), 400
+    
+    try:
+        # Search for user
+        url = f"https://api.inaturalist.org/v1/users/autocomplete?q={username}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        users = []
+        for user in data.get('results', [])[:5]:
+            users.append({
+                'id': user.get('id'),
+                'login': user.get('login'),
+                'name': user.get('name', ''),
+                'icon': user.get('icon'),
+                'observations_count': user.get('observations_count', 0)
+            })
+        
+        return jsonify({'users': users})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/inaturalist/observations', methods=['GET'])
+def get_inaturalist_observations():
+    """Fetch observations for a user, optionally filtered by location"""
+    username = request.args.get('username', '')
+    lat = request.args.get('lat', type=float)
+    lng = request.args.get('lng', type=float)
+    radius_km = request.args.get('radius', 1, type=float)  # Default 1km
+    
+    if not username:
+        return jsonify({'error': 'Username required'}), 400
+    
+    try:
+        params = {
+            'user_login': username,
+            'per_page': 200,
+            'order': 'desc',
+            'order_by': 'observed_on',
+            'quality_grade': 'research,needs_id',
+            'iconic_taxa': 'Insecta,Aves,Plantae,Mammalia,Reptilia,Amphibia,Arachnida,Fungi'
+        }
+        
+        # Add location filter if provided
+        if lat and lng:
+            params['lat'] = lat
+            params['lng'] = lng
+            params['radius'] = radius_km
+        
+        url = "https://api.inaturalist.org/v1/observations"
+        response = requests.get(url, params=params, timeout=30)
+        data = response.json()
+        
+        observations = []
+        for obs in data.get('results', []):
+            if not obs.get('geojson'):
+                continue
+                
+            taxon = obs.get('taxon', {})
+            photos = obs.get('photos', [])
+            
+            observations.append({
+                'id': obs.get('id'),
+                'species': taxon.get('preferred_common_name') or taxon.get('name', 'Unknown'),
+                'scientific_name': taxon.get('name', ''),
+                'iconic_taxon': taxon.get('iconic_taxon_name', 'Other'),
+                'observed_on': obs.get('observed_on'),
+                'place_guess': obs.get('place_guess', ''),
+                'quality_grade': obs.get('quality_grade'),
+                'coordinates': obs.get('geojson', {}).get('coordinates', []),
+                'photo_url': photos[0].get('url', '').replace('square', 'medium') if photos else None,
+                'url': f"https://www.inaturalist.org/observations/{obs.get('id')}"
+            })
+        
+        return jsonify({
+            'total': data.get('total_results', 0),
+            'observations': observations,
+            'username': username
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/gardens/<garden_id>/link-inaturalist', methods=['POST'])
+def link_inaturalist_account(garden_id):
+    """Link iNaturalist account to a garden"""
+    data = request.json
+    username = data.get('username', '')
+    user_id = data.get('user_id')
+    
+    if not username:
+        return jsonify({'error': 'Username required'}), 400
+    
+    # Load gardens
+    gardens_file = os.path.join(STATIC_DIR, 'gardens.json')
+    try:
+        with open(gardens_file, 'r') as f:
+            gardens_data = json.load(f)
+    except:
+        gardens_data = {'type': 'FeatureCollection', 'features': []}
+    
+    # Find and update the garden
+    for feature in gardens_data.get('features', []):
+        if feature.get('properties', {}).get('id') == garden_id:
+            feature['properties']['inaturalist_username'] = username
+            feature['properties']['inaturalist_user_id'] = user_id
+            feature['properties']['inaturalist_linked_at'] = datetime.now().isoformat()
+            break
+    
+    # Save
+    with open(gardens_file, 'w') as f:
+        json.dump(gardens_data, f, indent=2)
+    
+    return jsonify({'success': True, 'username': username})
+
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     get_engine()

@@ -5,7 +5,7 @@ import {
   getPropertyObservationStats,
   ConnectivityResult 
 } from './ConnectivityScoring';
-import INaturalistSync, { SyncedObservation } from './INaturalistSync';
+// INaturalistSync moved to UserDashboard
 import { PRIVACY_NOTICE, DATA_VISIBILITY } from './PrivacyUtils';
 import { X, Flower2, Droplets, Home, TreeDeciduous, Check, Star, Award, Info } from 'lucide-react';
 
@@ -90,7 +90,7 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({
   const [showReportGenerator, setShowReportGenerator] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
   const [showConnectivityDetails, setShowConnectivityDetails] = useState(false);
-  const [syncedObservations, setSyncedObservations] = useState<SyncedObservation[]>([]);
+  const [syncedObservations, setSyncedObservations] = useState<any[]>([]);
   const [inatUsername, setInatUsername] = useState('');
   const [showPrivacyInfo, setShowPrivacyInfo] = useState(false);
 
@@ -490,13 +490,7 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({
           </div>
 
           {/* iNaturalist Sync */}
-          <INaturalistSync
-            propertyLat={lat}
-            propertyLng={lng}
-            radiusMeters={500}
-            onSyncComplete={(obs: SyncedObservation[]) => setSyncedObservations(obs)}
-            existingObservations={syncedObservations}
-          />
+          {/* INaturalistSync moved to UserDashboard */}
 
           {/* Garden Name */}
           <div style={{ marginBottom: 16 }}>
