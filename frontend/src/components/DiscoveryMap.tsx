@@ -3,6 +3,7 @@ import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-ma
 import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare, Plus, Flower2 } from 'lucide-react';
 import { api } from '../api/client';
 import GardenRegistration from './GardenRegistration';
+import SpeciesSearch from './SpeciesSearch';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
@@ -118,6 +119,9 @@ const DiscoveryMap: React.FC = () => {
   const [selectedGarden, setSelectedGarden] = useState<Garden | null>(null);
   const [gardenSuccess, setGardenSuccess] = useState(false);
 
+  // Species search state
+  const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
+
   const availableYears = useMemo(() => Object.keys(yearStats).map(Number).sort((a, b) => a - b), [yearStats]);
   const minYear = availableYears[0] || 1871;
   const maxYear = availableYears[availableYears.length - 1] || 2025;
@@ -176,6 +180,10 @@ const DiscoveryMap: React.FC = () => {
         setProgress('Error loading cache');
       }
       setLoading(false);
+
+  const handleFlyTo = (lat: number, lng: number) => {
+    setViewState(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 12 }));
+  };
     };
     loadCache();
   }, []);
@@ -236,6 +244,11 @@ const DiscoveryMap: React.FC = () => {
       const year = props.year;
       const month = props.month;
       if (selectedYear && year !== selectedYear) return false;
+      // Species filter
+      if (selectedSpecies) {
+        const name = (props.species || props.common_name || '').toLowerCase();
+        if (name !== selectedSpecies) return false;
+      }
       if (selectedSeason) {
         const season = SEASONS.find(s => s.id === selectedSeason);
         if (season && month && !season.months.includes(month)) return false;
@@ -460,6 +473,19 @@ const DiscoveryMap: React.FC = () => {
             <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 400 }}>{rightFeatures.length.toLocaleString()} obs</div>
           </div>
         </>
+      )}
+
+      
+      {/* Species Search - top center */}
+      {!compareMode && (
+        <div style={{ position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 200 }}>
+          <SpeciesSearch
+            features={wildlifeFeatures}
+            onSelectSpecies={setSelectedSpecies}
+            onFlyTo={handleFlyTo}
+            selectedSpecies={selectedSpecies}
+          />
+        </div>
       )}
 
       {/* Register mode banner */}
