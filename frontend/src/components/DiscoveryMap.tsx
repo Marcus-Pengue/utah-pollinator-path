@@ -180,13 +180,13 @@ const DiscoveryMap: React.FC = () => {
         setProgress('Error loading cache');
       }
       setLoading(false);
+    };
+    loadCache();
+  }, []);
 
   const handleFlyTo = (lat: number, lng: number) => {
     setViewState(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 12 }));
   };
-    };
-    loadCache();
-  }, []);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
