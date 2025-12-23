@@ -684,6 +684,15 @@ const DiscoveryMap: React.FC = () => {
           lng={pendingLocation.lng}
           onSubmit={handleGardenSubmit}
           onCancel={() => { setPendingLocation(null); setRegisterMode(false); }}
+          existingGardens={gardens.map(g => ({
+            lat: g.geometry.coordinates[1],
+            lng: g.geometry.coordinates[0]
+          }))}
+          opportunityZones={opportunityData?.features?.map((f: any) => ({
+            lat: f.geometry.coordinates[1],
+            lng: f.geometry.coordinates[0]
+          })) || []}
+          observations={wildlifeFeatures}
         />
       )}
 

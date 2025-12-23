@@ -1,5 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import XercesReportGenerator from './XercesReportGenerator';
+import { 
+  calculateConnectivityScore, 
+  getPropertyObservationStats,
+  ConnectivityResult 
+} from './ConnectivityScoring';
+import iNaturalistSync, { SyncedObservation } from './iNaturalistSync';
+import { PRIVACY_NOTICE, DATA_VISIBILITY } from './PrivacyUtils';
 import { X, Flower2, Droplets, Home, TreeDeciduous, Check, Star, Award, Info } from 'lucide-react';
 
 interface GardenRegistrationProps {
@@ -7,6 +14,9 @@ interface GardenRegistrationProps {
   lng: number;
   onSubmit: (data: any) => void;
   onCancel: () => void;
+  existingGardens?: { lat: number; lng: number }[];
+  opportunityZones?: { lat: number; lng: number }[];
+  observations?: any[];
 }
 
 // Xerces-based scoring weights
@@ -62,7 +72,12 @@ const SEASONAL_BONUS = {
   winter: 5,
 };
 
-const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSubmit, onCancel }) => {
+const GardenRegistration: React.FC<GardenRegistrationProps> = ({ 
+  lat, lng, onSubmit, onCancel,
+  existingGardens = [],
+  opportunityZones = [],
+  observations = []
+}) => {
   const [name, setName] = useState('');
   const [size, setSize] = useState('medium');
   const [selectedPlants, setSelectedPlants] = useState<string[]>([]);
@@ -72,6 +87,25 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
   const [submitting, setSubmitting] = useState(false);
   const [showReportGenerator, setShowReportGenerator] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
+  const [showConnectivityDetails, setShowConnectivityDetails] = useState(false);
+  const [syncedObservations, setSyncedObservations] = useState<SyncedObservation[]>([]);
+  const [inatUsername, setInatUsername] = useState('');
+  const [showPrivacyInfo, setShowPrivacyInfo] = useState(false);
+
+  // Calculate connectivity score based on location
+  const connectivityScore = useMemo(() => {
+    return calculateConnectivityScore(
+      { lat, lng },
+      existingGardens,
+      opportunityZones,
+      observations
+    );
+  }, [lat, lng, existingGardens, opportunityZones, observations]);
+
+  // Get property-specific observation stats
+  const propertyStats = useMemo(() => {
+    return getPropertyObservationStats(lat, lng, observations, 500);
+  }, [lat, lng, observations]);
   const [showScoreDetails, setShowScoreDetails] = useState(false);
 
   const togglePlant = (id: string) => {
@@ -156,7 +190,21 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
       seasonalBonus
     );
 
-    const totalScore = Math.round(rawScore * sizeMultiplier);
+    // Add connectivity bonus (20% weight)
+    const connectivityBonus = Math.round(connectivityScore.bonusPoints * SCORING_WEIGHTS.connectivity);
+    
+    // Add iNaturalist observation bonus
+    let inatBonus = 0;
+    if (syncedObservations.length > 0) {
+      inatBonus += Math.min(syncedObservations.length * 2, 30); // Base points
+      const uniqueSpecies = new Set(syncedObservations.map(o => o.species)).size;
+      if (uniqueSpecies >= 10) inatBonus += 15;
+      else if (uniqueSpecies >= 5) inatBonus += 8;
+      const researchGrade = syncedObservations.filter(o => o.quality_grade === 'research').length;
+      if (researchGrade >= 5) inatBonus += 10;
+    }
+    
+    const totalScore = Math.round((rawScore * sizeMultiplier) + connectivityBonus + inatBonus);
 
     // Determine tier
     let tier = 'Seedling';
@@ -170,6 +218,9 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
       floralScore: Math.round(floralScore * SCORING_WEIGHTS.floralResources),
       nestingScore: Math.round(nestingScore * SCORING_WEIGHTS.nestingSites),
       habitatScore: Math.round(habitatScore * SCORING_WEIGHTS.habitatQuality),
+      connectivityBonus: Math.round(connectivityScore.bonusPoints * SCORING_WEIGHTS.connectivity),
+      inatBonus: syncedObservations.length > 0 ? Math.min(syncedObservations.length * 2, 30) + (new Set(syncedObservations.map(o => o.species)).size >= 10 ? 15 : new Set(syncedObservations.map(o => o.species)).size >= 5 ? 8 : 0) : 0,
+      syncedObsCount: syncedObservations.length,
       seasonalBonus,
       fallBonus,
       diversityBonus,
@@ -196,6 +247,9 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
       email,
       score: scoreDetails.totalScore,
       tier: scoreDetails.tier,
+      inat_username: inatUsername,
+      synced_observations: syncedObservations.map(o => o.inat_id),
+      synced_obs_count: syncedObservations.length,
     };
     await onSubmit(gardenData);
     setSubmittedData(gardenData);
@@ -328,12 +382,118 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
             backgroundColor: '#f0fdf4', 
             padding: 12, 
             borderRadius: 8, 
-            marginBottom: 20,
+            marginBottom: 12,
             fontSize: 13,
             color: '#166534'
           }}>
             📍 Location: {lat.toFixed(5)}, {lng.toFixed(5)}
           </div>
+
+          {/* Connectivity & Property Stats */}
+          <div style={{ 
+            backgroundColor: '#eff6ff', 
+            padding: 12, 
+            borderRadius: 8, 
+            marginBottom: 20,
+            border: '1px solid #bfdbfe'
+          }}>
+            <div 
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowConnectivityDetails(!showConnectivityDetails)}
+            >
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#1e40af' }}>
+                  🔗 Connectivity Bonus: +{scoreDetails.connectivityBonus} pts
+                </div>
+                <div style={{ fontSize: 11, color: '#3b82f6' }}>
+                  {propertyStats.total} wildlife observations within 500m of your property
+                </div>
+              </div>
+              <span style={{ color: '#3b82f6' }}>{showConnectivityDetails ? '▲' : '▼'}</span>
+            </div>
+
+            {showConnectivityDetails && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #bfdbfe' }}>
+                {/* Connectivity Details */}
+                <div style={{ fontSize: 11, marginBottom: 8 }}>
+                  {connectivityScore.details.map((detail, i) => (
+                    <div key={i} style={{ color: '#1e40af', marginBottom: 2 }}>{detail}</div>
+                  ))}
+                  {connectivityScore.details.length === 0 && (
+                    <div style={{ color: '#6b7280' }}>No connectivity bonuses yet</div>
+                  )}
+                </div>
+
+                {/* Property Observation Stats */}
+                {propertyStats.total > 0 && (
+                  <div style={{ 
+                    backgroundColor: 'white', 
+                    padding: 8, 
+                    borderRadius: 6,
+                    marginTop: 8
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                      YOUR PROPERTY'S WILDLIFE (500m radius)
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {Object.entries(propertyStats.byTaxon).map(([taxon, count]) => (
+                        <span 
+                          key={taxon}
+                          style={{ 
+                            fontSize: 10, 
+                            padding: '2px 6px', 
+                            backgroundColor: '#e0e7ff', 
+                            borderRadius: 4,
+                            color: '#3730a3'
+                          }}
+                        >
+                          {taxon}: {count}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>
+                      {propertyStats.species.length} unique species observed
+                    </div>
+                  </div>
+                )}
+
+                {/* Proximity info */}
+                <div style={{ fontSize: 10, color: '#6b7280', marginTop: 8 }}>
+                  {connectivityScore.nearestGardenDistance !== null && (
+                    <div>📍 Nearest garden: {Math.round(connectivityScore.nearestGardenDistance)}m away</div>
+                  )}
+                  {connectivityScore.nearestOpportunityZoneDistance !== null && (
+                    <div>🎯 Nearest priority zone: {Math.round(connectivityScore.nearestOpportunityZoneDistance)}m away</div>
+                  )}
+                  <div>🏡 Gardens within 500m: {connectivityScore.gardensWithin500m}</div>
+                </div>
+
+                <div style={{ 
+                  fontSize: 9, 
+                  color: '#9ca3af', 
+                  marginTop: 8,
+                  fontStyle: 'italic'
+                }}>
+                  Only observations within 500m of your property count toward your garden score.
+                  This ensures fair scoring based on your actual habitat contribution.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* iNaturalist Sync */}
+          <iNaturalistSync
+            propertyLat={lat}
+            propertyLng={lng}
+            radiusMeters={500}
+            onSyncComplete={(obs) => setSyncedObservations(obs)}
+            existingObservations={syncedObservations}
+          />
 
           {/* Garden Name */}
           <div style={{ marginBottom: 16 }}>
@@ -618,6 +778,70 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Privacy Notice */}
+          <div style={{
+            backgroundColor: '#f0f9ff',
+            border: '1px solid #bae6fd',
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 16
+          }}>
+            <div 
+              style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                cursor: 'pointer'
+              }}
+              onClick={() => setShowPrivacyInfo(!showPrivacyInfo)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>🔒</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#0369a1' }}>
+                  Your Privacy is Protected
+                </span>
+              </div>
+              <span style={{ color: '#0369a1', fontSize: 12 }}>
+                {showPrivacyInfo ? '▲' : '▼'}
+              </span>
+            </div>
+
+            {showPrivacyInfo && (
+              <div style={{ marginTop: 12, fontSize: 11 }}>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, color: '#166534', marginBottom: 4 }}>
+                    ✓ Shown Publicly (Anonymous):
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 16, color: '#374151' }}>
+                    {DATA_VISIBILITY.public.map((item, i) => (
+                      <li key={i} style={{ marginBottom: 2 }}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: '#dc2626', marginBottom: 4 }}>
+                    ✗ Never Shared:
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 16, color: '#374151' }}>
+                    {DATA_VISIBILITY.private.map((item, i) => (
+                      <li key={i} style={{ marginBottom: 2 }}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div style={{ 
+                  marginTop: 8, 
+                  paddingTop: 8, 
+                  borderTop: '1px solid #bae6fd',
+                  color: '#0369a1',
+                  fontStyle: 'italic'
+                }}>
+                  Your exact location is offset by ~50m on public maps.
+                  Gardens appear as "Pollinator Habitat UPP-XXXX" to others.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Submit */}

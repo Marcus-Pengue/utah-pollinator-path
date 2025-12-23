@@ -730,14 +730,72 @@ def export_gardens_csv():
     
     return output.getvalue()
 
+
+import hashlib
+import random
+
+def anonymize_garden_for_public(garden):
+    """Anonymize garden data for public display."""
+    props = garden.get('properties', {})
+    coords = garden.get('geometry', {}).get('coordinates', [0, 0])
+    
+    # Generate anonymous ID
+    garden_id = props.get('id', str(random.random()))
+    hash_obj = hashlib.md5(garden_id.encode())
+    anon_id = f"UPP-{hash_obj.hexdigest()[:6].upper()}"
+    
+    # Offset location slightly (~50m) for privacy
+    lat_offset = (random.random() - 0.5) * 0.0009
+    lng_offset = (random.random() - 0.5) * 0.0009
+    
+    plants = props.get('plants', [])
+    features = props.get('features', [])
+    fall_bloomers = ['goldenrod', 'aster', 'rabbitbrush', 'agastache']
+    
+    return {
+        'type': 'Feature',
+        'geometry': {
+            'type': 'Point',
+            'coordinates': [coords[0] + lng_offset, coords[1] + lat_offset]
+        },
+        'properties': {
+            'anonymous_id': anon_id,
+            'display_name': f"Pollinator Habitat {anon_id}",
+            'tier': props.get('tier', 'Seedling'),
+            'score': props.get('score', 0),
+            'size': props.get('size', 'medium'),
+            'plant_count': len(plants),
+            'feature_count': len(features),
+            'has_water': 'water' in features,
+            'is_pesticide_free': 'no_pesticides' in features,
+            'has_fall_bloomers': any(p in fall_bloomers for p in plants),
+            'observation_count': props.get('synced_obs_count', 0),
+            'registered_month': props.get('registered_at', '')[:7] if props.get('registered_at') else '',
+            # DO NOT include: name, email, exact location, inat_username, specific plants
+        }
+    }
+
+
 @app.route('/api/gardens', methods=['GET'])
 def get_gardens():
-    """Get all registered gardens as GeoJSON."""
+    """Get all registered gardens as GeoJSON (anonymized for public)."""
     gardens = load_gardens()
+    # Return anonymized version for public display
+    anonymized = [anonymize_garden_for_public(g) for g in gardens]
     return jsonify({
         'type': 'FeatureCollection',
-        'features': gardens
+        'features': anonymized,
+        'privacy_note': 'Locations offset ~50m for privacy. Names anonymized.'
     })
+
+@app.route('/api/gardens/private/<garden_id>', methods=['GET'])
+def get_garden_private(garden_id):
+    """Get full garden details (for owner only - would need auth)."""
+    gardens = load_gardens()
+    for g in gardens:
+        if g.get('properties', {}).get('id') == garden_id:
+            return jsonify(g)
+    return jsonify({'error': 'Garden not found'}), 404
 
 @app.route('/api/gardens', methods=['POST'])
 def register_garden():
