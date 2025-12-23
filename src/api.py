@@ -683,22 +683,30 @@ def download_full_csv():
 
 @app.route('/api/downloads/info')
 def download_info():
-    """Get info about available downloads"""
+    """Get info about available downloads - reads from metadata.json"""
     import os
-    return jsonify({
-        'full_json': {
-            'observations': 311039,
-            'size_mb': round(os.path.getsize('src/static/downloads/utah_full_cache.json.gz') / (1024*1024), 1),
-            'format': 'GeoJSON (gzipped)',
-            'url': '/api/downloads/full-json'
-        },
-        'full_csv': {
-            'observations': 311039,
-            'size_mb': round(os.path.getsize('src/static/downloads/utah_full_cache.csv.gz') / (1024*1024), 1),
-            'format': 'CSV (gzipped)',
-            'url': '/api/downloads/full-csv'
-        }
-    })
+    meta_path = 'src/static/downloads/metadata.json'
+    if os.path.exists(meta_path):
+        with open(meta_path, 'r') as f:
+            meta = json.load(f)
+        return jsonify({
+            'observations': meta.get('observations', 0),
+            'generated': meta.get('generated', ''),
+            'date_range': meta.get('date_range', ''),
+            'sources': meta.get('sources', []),
+            'files': {
+                'json_gz': {
+                    'size_mb': meta['files']['json_gz']['size_mb'],
+                    'url': '/api/downloads/full-json'
+                },
+                'csv_gz': {
+                    'size_mb': meta['files']['csv_gz']['size_mb'],
+                    'url': '/api/downloads/full-csv'
+                }
+            }
+        })
+    else:
+        return jsonify({'error': 'Metadata not found'}), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

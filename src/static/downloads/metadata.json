@@ -1,0 +1,17 @@
+{
+  "observations": 311039,
+  "generated": "2025-12-23T20:26:53.635330",
+  "files": {
+    "json_gz": {
+      "size_mb": 9.8
+    },
+    "csv_gz": {
+      "size_mb": 5.2
+    }
+  },
+  "sources": [
+    "iNaturalist",
+    "GBIF"
+  ],
+  "date_range": "1871-2025"
+}
