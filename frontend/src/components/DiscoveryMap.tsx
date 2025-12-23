@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import MapGL, { Marker, Popup, NavigationControl, Source, Layer, MapRef } from 'react-map-gl';
+import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
 import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare } from 'lucide-react';
 import { api } from '../api/client';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -71,14 +71,6 @@ function getGridColor(p: number): string {
   return '#86efac';
 }
 
-const COMPARISON_PRESETS = [
-  { name: '100 Years', left: [1920, 1930], right: [2020, 2025] },
-  { name: '50 Years', left: [1970, 1980], right: [2020, 2025] },
-  { name: 'Pre/Post iNat', left: [2000, 2010], right: [2015, 2025] },
-  { name: 'Historic', left: [1900, 1950], right: [2000, 2025] },
-  { name: '2010s vs 2020s', left: [2010, 2019], right: [2020, 2025] },
-];
-
 const DiscoveryMap: React.FC = () => {
   const [viewState, setViewState] = useState({ latitude: 40.666, longitude: -111.897, zoom: 10 });
   const [wildlifeFilters, setWildlifeFilters] = useState(WILDLIFE_FILTERS);
@@ -101,11 +93,28 @@ const DiscoveryMap: React.FC = () => {
   const [leftYearRange, setLeftYearRange] = useState<[number, number]>([1920, 1930]);
   const [rightYearRange, setRightYearRange] = useState<[number, number]>([2020, 2025]);
   const [isDragging, setIsDragging] = useState(false);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const availableYears = useMemo(() => Object.keys(yearStats).map(Number).sort((a, b) => a - b), [yearStats]);
   const minYear = availableYears[0] || 1871;
   const maxYear = availableYears[availableYears.length - 1] || 2025;
+
+  // Preset configurations
+  const presets = [
+    { id: '100years', name: '100 Years', left: [1920, 1930] as [number, number], right: [2020, 2025] as [number, number] },
+    { id: '50years', name: '50 Years', left: [1970, 1980] as [number, number], right: [2020, 2025] as [number, number] },
+    { id: 'inat', name: 'Pre/Post iNat', left: [2000, 2010] as [number, number], right: [2015, 2025] as [number, number] },
+    { id: 'historic', name: 'Historic', left: [1900, 1950] as [number, number], right: [2000, 2025] as [number, number] },
+    { id: 'decades', name: '2010s vs 2020s', left: [2010, 2019] as [number, number], right: [2020, 2025] as [number, number] },
+  ];
+
+  const applyPreset = (preset: typeof presets[0]) => {
+    console.log('Applying preset:', preset.name, preset.left, preset.right);
+    setLeftYearRange(preset.left);
+    setRightYearRange(preset.right);
+    setActivePreset(preset.id);
+  };
 
   useEffect(() => {
     if (!playing || compareMode || availableYears.length === 0) return;
@@ -147,26 +156,67 @@ const DiscoveryMap: React.FC = () => {
 
   const toggleWildlife = (id: string) => setWildlifeFilters(p => p.map(l => l.id === id ? {...l, visible: !l.visible} : l));
 
-  const filterFeatures = useCallback((features: Feature[], yearRange?: [number, number]) => {
+  // Filter features - now a regular function since deps are passed as args
+  const filterByYear = (features: Feature[], yearRange: [number, number]) => {
     return features.filter(f => {
       const props = f.properties || {};
       const year = props.year;
       const month = props.month;
-      if (yearRange && year && (year < yearRange[0] || year > yearRange[1])) return false;
-      if (!compareMode && selectedYear && year !== selectedYear) return false;
+      
+      // Year filter
+      if (year && (year < yearRange[0] || year > yearRange[1])) return false;
+      
+      // Season filter
       if (selectedSeason) {
         const season = SEASONS.find(s => s.id === selectedSeason);
         if (season && month && !season.months.includes(month)) return false;
       }
+      
+      // Taxon filter
       const taxon = props.iconic_taxon;
       const filter = wildlifeFilters.find(w => w.id === taxon);
       if (filter && !filter.visible) return false;
+      
       return true;
     });
-  }, [compareMode, selectedYear, selectedSeason, wildlifeFilters]);
+  };
 
-  const leftFeatures = useMemo(() => compareMode ? filterFeatures(wildlifeFeatures, leftYearRange) : filterFeatures(wildlifeFeatures), [wildlifeFeatures, leftYearRange, compareMode, filterFeatures]);
-  const rightFeatures = useMemo(() => compareMode ? filterFeatures(wildlifeFeatures, rightYearRange) : [], [wildlifeFeatures, rightYearRange, compareMode, filterFeatures]);
+  const filterAll = (features: Feature[]) => {
+    return features.filter(f => {
+      const props = f.properties || {};
+      const year = props.year;
+      const month = props.month;
+      
+      if (selectedYear && year !== selectedYear) return false;
+      
+      if (selectedSeason) {
+        const season = SEASONS.find(s => s.id === selectedSeason);
+        if (season && month && !season.months.includes(month)) return false;
+      }
+      
+      const taxon = props.iconic_taxon;
+      const filter = wildlifeFilters.find(w => w.id === taxon);
+      if (filter && !filter.visible) return false;
+      
+      return true;
+    });
+  };
+
+  // Compute features for each side
+  const leftFeatures = useMemo(() => {
+    if (compareMode) {
+      return filterByYear(wildlifeFeatures, leftYearRange);
+    }
+    return filterAll(wildlifeFeatures);
+  }, [wildlifeFeatures, leftYearRange, compareMode, selectedYear, selectedSeason, wildlifeFilters]);
+  
+  const rightFeatures = useMemo(() => {
+    if (compareMode) {
+      return filterByYear(wildlifeFeatures, rightYearRange);
+    }
+    return [];
+  }, [wildlifeFeatures, rightYearRange, compareMode, selectedSeason, wildlifeFilters]);
+
   const visibleFeatures = compareMode ? leftFeatures : leftFeatures;
   const gridCells = useMemo(() => createGrid(visibleFeatures), [visibleFeatures]);
   
@@ -208,7 +258,7 @@ const DiscoveryMap: React.FC = () => {
   return (
     <div ref={containerRef} style={{ width: '100vw', height: '100vh', position: 'relative' }} onMouseMove={handleMouseMove} onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}>
       
-      {/* Main Map (or Left map in compare mode) */}
+      {/* Left map */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', clipPath: compareMode ? `inset(0 ${100 - sliderPosition}% 0 0)` : 'none' }}>
         <MapGL {...viewState} onMove={e => setViewState(e.viewState)} mapStyle="mapbox://styles/mapbox/light-v11" mapboxAccessToken={MAPBOX_TOKEN} style={{ width: '100%', height: '100%' }}>
           {!compareMode && <NavigationControl position="bottom-right" />}
@@ -246,7 +296,7 @@ const DiscoveryMap: React.FC = () => {
         </MapGL>
       </div>
 
-      {/* Right map in compare mode */}
+      {/* Right map */}
       {compareMode && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', clipPath: `inset(0 0 0 ${sliderPosition}%)` }}>
           <MapGL {...viewState} onMove={e => setViewState(e.viewState)} mapStyle="mapbox://styles/mapbox/light-v11" mapboxAccessToken={MAPBOX_TOKEN} style={{ width: '100%', height: '100%' }}>
@@ -272,16 +322,46 @@ const DiscoveryMap: React.FC = () => {
         </div>
       )}
 
-      {/* Year labels in compare mode */}
+      {/* Year labels in compare mode - positioned in center of each half */}
       {compareMode && (
         <>
-          <div style={{ position: 'absolute', top: 80, left: 250, backgroundColor: 'rgba(59,130,246,0.95)', color: 'white', padding: '10px 16px', borderRadius: 10, fontWeight: 700, fontSize: 16, zIndex: 150, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <div style={{ 
+            position: 'absolute', 
+            top: 100, 
+            left: `${sliderPosition / 2}%`,
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(59,130,246,0.95)', 
+            color: 'white', 
+            padding: '12px 20px', 
+            borderRadius: 12, 
+            fontWeight: 700, 
+            fontSize: 18, 
+            zIndex: 150, 
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            textAlign: 'center',
+            minWidth: 140
+          }}>
             {leftYearRange[0]} - {leftYearRange[1]}
-            <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 400 }}>{leftFeatures.length.toLocaleString()} observations</div>
+            <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 400 }}>{leftFeatures.length.toLocaleString()} obs</div>
           </div>
-          <div style={{ position: 'absolute', top: 80, right: 320, backgroundColor: 'rgba(234,88,12,0.95)', color: 'white', padding: '10px 16px', borderRadius: 10, fontWeight: 700, fontSize: 16, zIndex: 150, boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <div style={{ 
+            position: 'absolute', 
+            top: 100, 
+            left: `${sliderPosition + (100 - sliderPosition) / 2}%`,
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(234,88,12,0.95)', 
+            color: 'white', 
+            padding: '12px 20px', 
+            borderRadius: 12, 
+            fontWeight: 700, 
+            fontSize: 18, 
+            zIndex: 150, 
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            textAlign: 'center',
+            minWidth: 140
+          }}>
             {rightYearRange[0]} - {rightYearRange[1]}
-            <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 400 }}>{rightFeatures.length.toLocaleString()} observations</div>
+            <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 400 }}>{rightFeatures.length.toLocaleString()} obs</div>
           </div>
         </>
       )}
@@ -341,8 +421,23 @@ const DiscoveryMap: React.FC = () => {
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>PRESETS</div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {COMPARISON_PRESETS.map(p => (
-                      <button key={p.name} onClick={() => { setLeftYearRange(p.left as [number, number]); setRightYearRange(p.right as [number, number]); }} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: '#eee', color: '#666', cursor: 'pointer', fontSize: 9 }}>{p.name}</button>
+                    {presets.map(p => (
+                      <button 
+                        key={p.id} 
+                        onClick={() => applyPreset(p)} 
+                        style={{ 
+                          padding: '5px 10px', 
+                          borderRadius: 4, 
+                          border: 'none', 
+                          backgroundColor: activePreset === p.id ? '#2563eb' : '#eee', 
+                          color: activePreset === p.id ? 'white' : '#666', 
+                          cursor: 'pointer', 
+                          fontSize: 10,
+                          fontWeight: activePreset === p.id ? 600 : 400
+                        }}
+                      >
+                        {p.name}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -350,34 +445,36 @@ const DiscoveryMap: React.FC = () => {
                 <div style={{ marginBottom: 8, padding: 8, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 6, border: '2px solid #3b82f6' }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: '#2563eb', marginBottom: 4 }}>🔵 Left: {leftYearRange[0]} - {leftYearRange[1]}</div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <input type="number" min={minYear} max={maxYear} value={leftYearRange[0]} onChange={e => setLeftYearRange([parseInt(e.target.value) || minYear, leftYearRange[1]])} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                    <input type="number" min={minYear} max={maxYear} value={leftYearRange[1]} onChange={e => setLeftYearRange([leftYearRange[0], parseInt(e.target.value) || maxYear])} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
+                    <input type="number" min={minYear} max={maxYear} value={leftYearRange[0]} onChange={e => { setLeftYearRange([parseInt(e.target.value) || minYear, leftYearRange[1]]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
+                    <input type="number" min={minYear} max={maxYear} value={leftYearRange[1]} onChange={e => { setLeftYearRange([leftYearRange[0], parseInt(e.target.value) || maxYear]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
                   </div>
+                  <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 4, fontWeight: 500 }}>{leftFeatures.length.toLocaleString()} observations</div>
                 </div>
                 
                 <div style={{ marginBottom: 8, padding: 8, backgroundColor: 'rgba(234,88,12,0.1)', borderRadius: 6, border: '2px solid #ea580c' }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: '#ea580c', marginBottom: 4 }}>🟠 Right: {rightYearRange[0]} - {rightYearRange[1]}</div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <input type="number" min={minYear} max={maxYear} value={rightYearRange[0]} onChange={e => setRightYearRange([parseInt(e.target.value) || minYear, rightYearRange[1]])} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                    <input type="number" min={minYear} max={maxYear} value={rightYearRange[1]} onChange={e => setRightYearRange([rightYearRange[0], parseInt(e.target.value) || maxYear])} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
+                    <input type="number" min={minYear} max={maxYear} value={rightYearRange[0]} onChange={e => { setRightYearRange([parseInt(e.target.value) || minYear, rightYearRange[1]]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
+                    <input type="number" min={minYear} max={maxYear} value={rightYearRange[1]} onChange={e => { setRightYearRange([rightYearRange[0], parseInt(e.target.value) || maxYear]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
                   </div>
+                  <div style={{ fontSize: 10, color: '#ea580c', marginTop: 4, fontWeight: 500 }}>{rightFeatures.length.toLocaleString()} observations</div>
                 </div>
                 
                 <div style={{ backgroundColor: '#f5f5f5', borderRadius: 6, padding: 8 }}>
-                  <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>BY TAXON</div>
+                  <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>COMPARISON</div>
                   {WILDLIFE_FILTERS.slice(0, 4).map(w => {
                     const left = leftTaxonStats[w.id] || 0;
                     const right = rightTaxonStats[w.id] || 0;
-                    const change = left > 0 ? Math.round(((right - left) / left) * 100) : (right > 0 ? 100 : 0);
+                    const change = left > 0 ? Math.round(((right - left) / left) * 100) : (right > 0 ? 999 : 0);
                     return (
                       <div key={w.id} style={{ display: 'flex', alignItems: 'center', fontSize: 10, marginBottom: 2 }}>
                         <span style={{ marginRight: 4 }}>{w.icon}</span>
                         <span style={{ flex: 1 }}>{w.name}</span>
-                        <span style={{ color: '#3b82f6', width: 35, textAlign: 'right', fontSize: 9 }}>{left.toLocaleString()}</span>
-                        <span style={{ margin: '0 2px', color: '#ccc' }}>→</span>
-                        <span style={{ color: '#ea580c', width: 35, fontSize: 9 }}>{right.toLocaleString()}</span>
-                        <span style={{ width: 40, textAlign: 'right', color: change > 0 ? '#22c55e' : change < 0 ? '#ef4444' : '#999', fontWeight: 600, fontSize: 9 }}>
-                          {change > 0 ? '+' : ''}{change}%
+                        <span style={{ color: '#3b82f6', width: 40, textAlign: 'right', fontSize: 9 }}>{left.toLocaleString()}</span>
+                        <span style={{ margin: '0 4px', color: '#ccc' }}>→</span>
+                        <span style={{ color: '#ea580c', width: 40, fontSize: 9 }}>{right.toLocaleString()}</span>
+                        <span style={{ width: 45, textAlign: 'right', color: change > 0 ? '#22c55e' : change < 0 ? '#ef4444' : '#999', fontWeight: 600, fontSize: 9 }}>
+                          {change > 100 ? '++' : (change > 0 ? '+' : '')}{Math.min(change, 999)}%
                         </span>
                       </div>
                     );
@@ -434,7 +531,7 @@ const DiscoveryMap: React.FC = () => {
         <span style={{ fontSize: 13, fontWeight: 600 }}>🐝 Utah Pollinator Path</span>
         <span style={{ fontSize: 11, color: '#666' }}>📊 {wildlifeFeatures.length.toLocaleString()} total</span>
         <span style={{ fontSize: 11, color: '#666' }}>📅 1871-2025</span>
-        {compareMode && <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 500 }}>🔀 Compare Mode</span>}
+        {compareMode && <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 500 }}>🔀 Compare</span>}
       </div>
     </div>
   );
