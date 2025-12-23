@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import INaturalistSync from './INaturalistSync';
+import NeighborDiscovery from './NeighborDiscovery';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
@@ -622,7 +623,20 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
 
           {/* Network Section */}
           {gardenData && activeSection === 'network' && (
-            <NeighborRecruitment
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <NeighborDiscovery
+                  gardenId={gardenData.id}
+                  gardenLat={gardenData.lat}
+                  gardenLng={gardenData.lng}
+                  isDiscoverable={true}
+                  onToggleDiscoverable={(value) => console.log('Toggle discoverable:', value)}
+                />
+              </div>
+              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16 }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>Invite Neighbors</h4>
+              </div>
+              <NeighborRecruitment
               gardenId={gardenData.id}
               gardenName={gardenData.name}
               gardenLat={gardenData.lat}
@@ -630,7 +644,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               referralCode={gardenData.referralCode}
               referralCount={gardenData.referralCount}
               neighborGardens={[]}
-            />
+              />
+            </>
           )}
 
           {/* Achievements Section */}

@@ -193,7 +193,13 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
                 <input
                   type="checkbox"
                   checked={props.showObservations}
-                  onChange={(e) => props.onToggleObservations(e.target.checked)}
+                  onChange={(e) => {
+                    props.onToggleObservations(e.target.checked);
+                    // When turning off observations, clear taxa
+                    if (!e.target.checked) {
+                      props.onTaxaChange([]);
+                    }
+                  }}
                   style={{ width: 16, height: 16 }}
                 />
                 <Circle size={14} color="#f59e0b" fill="#f59e0b" />
@@ -293,7 +299,13 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
             <div style={{ padding: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                 <button
-                  onClick={() => props.onTaxaChange(TAXA.map(t => t.id))}
+                  onClick={() => {
+                    props.onTaxaChange(TAXA.map(t => t.id));
+                    // Ensure observations layer is on when selecting taxa
+                    if (!props.showObservations) {
+                      props.onToggleObservations(true);
+                    }
+                  }}
                   style={{
                     padding: '4px 10px',
                     fontSize: 11,

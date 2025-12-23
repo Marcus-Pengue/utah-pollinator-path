@@ -263,6 +263,24 @@ const DiscoveryMap: React.FC = () => {
     setSelectedCity('');
   }, [appMode]);
 
+  // Sync observations layer toggle with taxa selection
+  useEffect(() => {
+    if (!showLayers.observations) {
+      // When observations layer is hidden, clear all taxa
+      setSelectedTaxa([]);
+    }
+  }, [showLayers.observations]);
+
+  // When all taxa are deselected, hide observations layer
+  useEffect(() => {
+    if (selectedTaxa.length === 0 && showLayers.observations) {
+      // Keep layer state in sync - if no taxa selected, layer effectively hidden
+      // But don't auto-hide, just let it show nothing
+    }
+  }, [selectedTaxa]);
+
+
+
   // Load observations near user's garden for homeowner mode
   useEffect(() => {
     if (appMode !== 'homeowner' || !userGardenData) {
