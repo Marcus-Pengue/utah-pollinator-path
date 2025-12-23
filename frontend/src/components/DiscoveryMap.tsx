@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
-import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Play, Pause, Grid3X3 } from 'lucide-react';
+import { Layers, Eye, EyeOff, Info, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, TrendingUp } from 'lucide-react';
 import { api } from '../api/client';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -12,14 +12,6 @@ interface Feature {
   properties: Record<string, any>;
 }
 
-interface LayerConfig {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  visible: boolean;
-}
-
 interface GridCell {
   lat: number;
   lng: number;
@@ -28,12 +20,7 @@ interface GridCell {
   features: Feature[];
 }
 
-const DEFAULT_LAYERS: LayerConfig[] = [
-  { id: 'parks', name: 'Parks', icon: '🌳', color: '#16a34a', visible: true },
-  { id: 'waystations', name: 'Waystations', icon: '🦋', color: '#f97316', visible: true },
-];
-
-const WILDLIFE_FILTERS: LayerConfig[] = [
+const WILDLIFE_FILTERS = [
   { id: 'Aves', name: 'Birds', icon: '🐦', color: '#3b82f6', visible: true },
   { id: 'Insecta', name: 'Insects', icon: '🦋', color: '#8b5cf6', visible: true },
   { id: 'Plantae', name: 'Plants', icon: '🌿', color: '#22c55e', visible: true },
@@ -44,7 +31,21 @@ const WILDLIFE_FILTERS: LayerConfig[] = [
   { id: 'Amphibia', name: 'Amphibians', icon: '🐸', color: '#06b6d4', visible: true },
 ];
 
-const GRID_SIZE = 0.012; // Slightly larger grid for more data
+const SEASONS = [
+  { id: 'spring', name: 'Spring', months: [3, 4, 5], icon: '🌸', color: '#ec4899' },
+  { id: 'summer', name: 'Summer', months: [6, 7, 8], icon: '☀️', color: '#f59e0b' },
+  { id: 'fall', name: 'Fall', months: [9, 10, 11], icon: '🍂', color: '#f97316' },
+  { id: 'winter', name: 'Winter', months: [12, 1, 2], icon: '❄️', color: '#06b6d4' },
+];
+
+const ERAS = [
+  { id: 'all', name: 'All Time', range: [1871, 2025] },
+  { id: 'historic', name: 'Historic (1871-1950)', range: [1871, 1950] },
+  { id: 'modern', name: 'Modern (1951-2010)', range: [1951, 2010] },
+  { id: 'recent', name: 'Recent (2011-2025)', range: [2011, 2025] },
+];
+
+const GRID_SIZE = 0.012;
 
 function createGrid(features: Feature[]): GridCell[] {
   const cellMap: Record<string, GridCell> = {};
@@ -79,42 +80,68 @@ function getGridColor(p: number): string {
 
 const DiscoveryMap: React.FC = () => {
   const [viewState, setViewState] = useState({ latitude: 40.666, longitude: -111.897, zoom: 10 });
-  const [layers, setLayers] = useState(DEFAULT_LAYERS);
   const [wildlifeFilters, setWildlifeFilters] = useState(WILDLIFE_FILTERS);
-  const [features, setFeatures] = useState<Feature[]>([]);
   const [wildlifeFeatures, setWildlifeFeatures] = useState<Feature[]>([]);
   const [selectedCell, setSelectedCell] = useState<GridCell | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
-  const [monarchStatus, setMonarchStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState('');
   const [layerPanelOpen, setLayerPanelOpen] = useState(true);
-  const [infoPanelOpen, setInfoPanelOpen] = useState(true);
+  const [timelinePanelOpen, setTimelinePanelOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'points'>('grid');
   
   // Timeline state
-  const [yearRange, setYearRange] = useState<[number, number]>([2015, 2025]);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedEra, setSelectedEra] = useState('all');
+  const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [playSpeed, setPlaySpeed] = useState(800);
   const [yearStats, setYearStats] = useState<Record<string, number>>({});
+  const [monthStats, setMonthStats] = useState<Record<string, number>>({});
+
+  // Get era range
+  const eraRange = useMemo(() => {
+    const era = ERAS.find(e => e.id === selectedEra);
+    return era?.range || [1871, 2025];
+  }, [selectedEra]);
+
+  // Get years in current era
+  const eraYears = useMemo(() => {
+    return Object.keys(yearStats)
+      .map(Number)
+      .filter(y => y >= eraRange[0] && y <= eraRange[1])
+      .sort((a, b) => a - b);
+  }, [yearStats, eraRange]);
+
+  // Animation effect
+  useEffect(() => {
+    if (!playing || eraYears.length === 0) return;
+    
+    const interval = setInterval(() => {
+      setSelectedYear(prev => {
+        const idx = prev ? eraYears.indexOf(prev) : -1;
+        const next = (idx + 1) % eraYears.length;
+        if (next === 0) {
+          setPlaying(false);
+          return null;
+        }
+        return eraYears[next];
+      });
+    }, playSpeed);
+    
+    return () => clearInterval(interval);
+  }, [playing, eraYears, playSpeed]);
 
   // Load cached wildlife data
   useEffect(() => {
     const loadCache = async () => {
       setLoading(true);
-      setProgress('Loading 100k+ observations...');
+      setProgress('Loading 105k+ observations...');
       
       try {
         const res = await api.get('/api/wildlife/cached', { timeout: 120000 });
         setWildlifeFeatures(res.data.features || []);
         setYearStats(res.data.year_distribution || {});
-        
-        // Set year range from data
-        const years = Object.keys(res.data.year_distribution || {}).map(Number).filter(y => y > 1900);
-        if (years.length > 0) {
-          setYearRange([Math.min(...years), Math.max(...years)]);
-        }
-        
         setProgress(`Loaded ${res.data.total?.toLocaleString()} observations`);
       } catch (err) {
         console.error('Cache load error:', err);
@@ -126,57 +153,43 @@ const DiscoveryMap: React.FC = () => {
     loadCache();
   }, []);
 
-  // Load map features
+  // Calculate month stats from visible features
   useEffect(() => {
-    const fetchMap = async () => {
-      try {
-        const [mapRes, monarchRes] = await Promise.all([
-          api.get('/api/map/unified', { params: { layers: layers.filter(l => l.visible).map(l => l.id).join(',') } }),
-          api.get('/api/map/monarch-status')
-        ]);
-        setFeatures(mapRes.data.features || []);
-        setMonarchStatus(monarchRes.data);
-      } catch (e) { console.error(e); }
-    };
-    fetchMap();
-  }, [layers]);
+    const stats: Record<string, number> = {};
+    wildlifeFeatures.forEach(f => {
+      const m = f.properties?.month;
+      if (m) stats[m] = (stats[m] || 0) + 1;
+    });
+    setMonthStats(stats);
+  }, [wildlifeFeatures]);
 
-  // Animation effect
-  useEffect(() => {
-    if (!playing) return;
-    const years = Object.keys(yearStats).map(Number).filter(y => y >= yearRange[0] && y <= yearRange[1]).sort();
-    if (years.length === 0) return;
-    
-    const interval = setInterval(() => {
-      setSelectedYear(prev => {
-        const idx = prev ? years.indexOf(prev) : -1;
-        const next = (idx + 1) % years.length;
-        if (next === 0) setPlaying(false);
-        return years[next];
-      });
-    }, 800);
-    
-    return () => clearInterval(interval);
-  }, [playing, yearStats, yearRange]);
-
-  const toggleLayer = (id: string) => setLayers(p => p.map(l => l.id === id ? {...l, visible: !l.visible} : l));
   const toggleWildlife = (id: string) => setWildlifeFilters(p => p.map(l => l.id === id ? {...l, visible: !l.visible} : l));
 
-  // Filter features by year and taxon
+  // Filter features
   const visibleFeatures = useMemo(() => {
-    return [...features, ...wildlifeFeatures].filter(f => {
-      // Year filter
-      const year = f.properties?.year;
+    return wildlifeFeatures.filter(f => {
+      const props = f.properties || {};
+      const year = props.year;
+      const month = props.month;
+      
+      // Year/Era filter
       if (selectedYear && year !== selectedYear) return false;
-      if (!selectedYear && year && (year < yearRange[0] || year > yearRange[1])) return false;
+      if (!selectedYear && year && (year < eraRange[0] || year > eraRange[1])) return false;
+      
+      // Season filter
+      if (selectedSeason) {
+        const season = SEASONS.find(s => s.id === selectedSeason);
+        if (season && month && !season.months.includes(month)) return false;
+      }
       
       // Taxon filter
-      if (f.properties?.source === 'inaturalist' || f.properties?.source === 'gbif') {
-        return wildlifeFilters.find(w => w.id === f.properties.iconic_taxon)?.visible ?? true;
-      }
-      return layers.find(l => l.id === f.properties.layer)?.visible ?? false;
+      const taxon = props.iconic_taxon;
+      const filter = wildlifeFilters.find(w => w.id === taxon);
+      if (filter && !filter.visible) return false;
+      
+      return true;
     });
-  }, [features, wildlifeFeatures, selectedYear, yearRange, wildlifeFilters, layers]);
+  }, [wildlifeFeatures, selectedYear, eraRange, selectedSeason, wildlifeFilters]);
 
   const gridCells = useMemo(() => createGrid(visibleFeatures), [visibleFeatures]);
   
@@ -194,14 +207,15 @@ const DiscoveryMap: React.FC = () => {
     features: visibleFeatures.map(f => ({ type: 'Feature' as const, geometry: f.geometry, properties: {} }))
   }), [visibleFeatures]);
 
-  // Get decade markers for timeline
-  const decades = useMemo(() => {
-    const d = [];
-    for (let y = Math.ceil(yearRange[0] / 10) * 10; y <= yearRange[1]; y += 10) {
-      d.push(y);
-    }
-    return d;
-  }, [yearRange]);
+  // Calculate decade totals for visualization
+  const decadeTotals = useMemo(() => {
+    const totals: Record<number, number> = {};
+    Object.entries(yearStats).forEach(([year, count]) => {
+      const decade = Math.floor(parseInt(year) / 10) * 10;
+      totals[decade] = (totals[decade] || 0) + (count as number);
+    });
+    return totals;
+  }, [yearStats]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -257,7 +271,7 @@ const DiscoveryMap: React.FC = () => {
               <p style={{ margin: '2px 0', fontSize: 10, color: '#666', fontStyle: 'italic' }}>{selectedFeature.properties.scientific_name}</p>
               {selectedFeature.properties.photo_url && <img src={selectedFeature.properties.photo_url} alt="" style={{ width: '100%', borderRadius: 4, margin: '6px 0' }} />}
               {selectedFeature.properties.observed_on && <p style={{ margin: 2, fontSize: 10, color: '#666' }}>📅 {selectedFeature.properties.observed_on}</p>}
-              <p style={{ margin: 2, fontSize: 9, color: '#999' }}>Source: {selectedFeature.properties.source} {selectedFeature.properties.institution && `(${selectedFeature.properties.institution})`}</p>
+              <p style={{ margin: 2, fontSize: 9, color: '#999' }}>Source: {selectedFeature.properties.source}</p>
             </div>
           </Popup>
         )}
@@ -266,17 +280,16 @@ const DiscoveryMap: React.FC = () => {
       {/* Layers Panel */}
       <div style={{ position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', width: 220, overflow: 'hidden' }}>
         <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}><Layers size={16} style={{ marginRight: 6 }} />Layers</span>
+          <span style={{ fontWeight: 600, fontSize: 13 }}><Layers size={16} style={{ marginRight: 6 }} />Species</span>
           {layerPanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
         {layerPanelOpen && (
-          <div style={{ padding: 10, maxHeight: 320, overflowY: 'auto' }}>
+          <div style={{ padding: 10, maxHeight: 300, overflowY: 'auto' }}>
             <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
               <button onClick={() => setViewMode('grid')} style={{ flex: 1, padding: 4, borderRadius: 4, border: 'none', backgroundColor: viewMode === 'grid' ? '#22c55e' : '#eee', color: viewMode === 'grid' ? 'white' : '#666', cursor: 'pointer', fontSize: 10 }}><Grid3X3 size={10} /> Grid</button>
               <button onClick={() => setViewMode('points')} style={{ flex: 1, padding: 4, borderRadius: 4, border: 'none', backgroundColor: viewMode === 'points' ? '#22c55e' : '#eee', color: viewMode === 'points' ? 'white' : '#666', cursor: 'pointer', fontSize: 10 }}>📍 Points</button>
             </div>
             
-            <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>WILDLIFE ({visibleFeatures.length.toLocaleString()})</div>
             {wildlifeFilters.map(w => (
               <div key={w.id} onClick={() => toggleWildlife(w.id)} style={{ display: 'flex', alignItems: 'center', padding: '3px 6px', borderRadius: 4, cursor: 'pointer', backgroundColor: w.visible ? `${w.color}15` : 'transparent', marginBottom: 2 }}>
                 <span style={{ marginRight: 5, fontSize: 11 }}>{w.icon}</span>
@@ -287,94 +300,114 @@ const DiscoveryMap: React.FC = () => {
             ))}
             
             <div style={{ marginTop: 8, padding: 6, backgroundColor: '#f5f5f5', borderRadius: 4, fontSize: 10 }}>
-              {loading ? <div style={{ color: '#888' }}>{progress}</div> : <span>📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> visible</span>}
+              {loading ? <span style={{ color: '#888' }}>{progress}</span> : <span>📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> visible</span>}
             </div>
           </div>
         )}
       </div>
 
-      {/* Info Panel */}
-      <div style={{ position: 'absolute', top: 16, right: 16, backgroundColor: 'white', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', width: 260, overflow: 'hidden' }}>
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setInfoPanelOpen(!infoPanelOpen)}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}><Info size={16} style={{ marginRight: 6 }} />Utah Pollinator Path</span>
-          {infoPanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      {/* Timeline Panel */}
+      <div style={{ position: 'absolute', top: 16, right: 16, backgroundColor: 'white', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', width: 280, overflow: 'hidden' }}>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setTimelinePanelOpen(!timelinePanelOpen)}>
+          <span style={{ fontWeight: 600, fontSize: 13 }}><Calendar size={16} style={{ marginRight: 6 }} />Timeline</span>
+          {timelinePanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
-        {infoPanelOpen && (
+        {timelinePanelOpen && (
           <div style={{ padding: 10 }}>
-            {monarchStatus && (
-              <div style={{ padding: 8, backgroundColor: '#fef3c7', borderRadius: 6, marginBottom: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>🦋 {monarchStatus.status}</div>
-                <div style={{ fontSize: 10, color: '#92400e' }}>{monarchStatus.utah_note}</div>
+            {/* Era selector */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>ERA</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {ERAS.map(era => (
+                  <button key={era.id} onClick={() => { setSelectedEra(era.id); setSelectedYear(null); }} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: selectedEra === era.id ? '#2563eb' : '#eee', color: selectedEra === era.id ? 'white' : '#666', cursor: 'pointer', fontSize: 9 }}>{era.name.split(' ')[0]}</button>
+                ))}
               </div>
-            )}
-            
-            <div style={{ fontSize: 11, marginBottom: 8 }}>
-              <div>📊 <strong>{wildlifeFeatures.length.toLocaleString()}</strong> total observations</div>
-              <div>📅 Data from <strong>{yearRange[0]}</strong> to <strong>{yearRange[1]}</strong></div>
-              <div>🔬 Sources: iNaturalist, GBIF</div>
             </div>
             
-            {/* Year distribution mini chart */}
-            <div style={{ marginTop: 8 }}>
-              <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>OBSERVATIONS BY YEAR</div>
-              <div style={{ display: 'flex', alignItems: 'end', gap: 1, height: 40 }}>
-                {Object.entries(yearStats)
-                  .filter(([y]) => parseInt(y) >= 2010)
+            {/* Decade chart */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>OBSERVATIONS BY DECADE</div>
+              <div style={{ display: 'flex', alignItems: 'end', gap: 2, height: 50 }}>
+                {Object.entries(decadeTotals)
+                  .filter(([d]) => parseInt(d) >= eraRange[0] && parseInt(d) <= eraRange[1])
                   .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
-                  .map(([year, count]) => {
-                    const max = Math.max(...Object.entries(yearStats).filter(([y]) => parseInt(y) >= 2010).map(([,c]) => c as number));
+                  .map(([decade, count]) => {
+                    const max = Math.max(...Object.entries(decadeTotals).filter(([d]) => parseInt(d) >= eraRange[0]).map(([,c]) => c as number));
                     const height = max > 0 ? ((count as number) / max) * 100 : 0;
-                    const isSelected = selectedYear === parseInt(year);
+                    const isActive = selectedYear && Math.floor(selectedYear / 10) * 10 === parseInt(decade);
                     return (
-                      <div key={year} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div key={decade} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div 
-                          style={{ width: '100%', height: `${Math.max(4, height)}%`, backgroundColor: isSelected ? '#2563eb' : '#22c55e', borderRadius: 1, cursor: 'pointer' }} 
-                          onClick={() => setSelectedYear(isSelected ? null : parseInt(year))}
-                          title={`${year}: ${(count as number).toLocaleString()}`}
+                          style={{ width: '100%', height: `${Math.max(4, height)}%`, backgroundColor: isActive ? '#2563eb' : '#22c55e', borderRadius: 2, cursor: 'pointer', transition: 'all 0.2s' }} 
+                          onClick={() => setSelectedYear(parseInt(decade))}
+                          title={`${decade}s: ${(count as number).toLocaleString()}`}
                         />
+                        <div style={{ fontSize: 7, color: '#999', marginTop: 2 }}>{decade.slice(-2)}s</div>
                       </div>
                     );
                   })}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#999', marginTop: 2 }}>
-                <span>2010</span>
-                <span>2025</span>
+            </div>
+            
+            {/* Season filter */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>SEASON</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => setSelectedSeason(null)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: !selectedSeason ? '#22c55e' : '#eee', color: !selectedSeason ? 'white' : '#666', cursor: 'pointer', fontSize: 9 }}>All</button>
+                {SEASONS.map(s => (
+                  <button key={s.id} onClick={() => setSelectedSeason(selectedSeason === s.id ? null : s.id)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: selectedSeason === s.id ? s.color : '#eee', color: selectedSeason === s.id ? 'white' : '#666', cursor: 'pointer', fontSize: 9 }}>{s.icon}</button>
+                ))}
               </div>
+            </div>
+            
+            {/* Year slider */}
+            <div>
+              <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>YEAR: <span style={{ color: '#2563eb', fontWeight: 600 }}>{selectedYear || 'All'}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={() => setPlaying(!playing)} style={{ padding: 6, border: 'none', backgroundColor: playing ? '#ef4444' : '#22c55e', borderRadius: 6, cursor: 'pointer', display: 'flex' }}>
+                  {playing ? <Pause size={12} color="white" /> : <Play size={12} color="white" />}
+                </button>
+                <input
+                  type="range"
+                  min={eraRange[0]}
+                  max={eraRange[1]}
+                  value={selectedYear || eraRange[1]}
+                  onChange={e => setSelectedYear(parseInt(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <button onClick={() => setSelectedYear(null)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: '#eee', color: '#666', cursor: 'pointer', fontSize: 9 }}>Reset</button>
+              </div>
+            </div>
+            
+            {/* Speed control */}
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 9, color: '#888' }}>Speed:</span>
+              {[{ label: '0.5x', ms: 1500 }, { label: '1x', ms: 800 }, { label: '2x', ms: 400 }].map(s => (
+                <button key={s.label} onClick={() => setPlaySpeed(s.ms)} style={{ padding: '2px 6px', borderRadius: 3, border: 'none', backgroundColor: playSpeed === s.ms ? '#2563eb' : '#eee', color: playSpeed === s.ms ? 'white' : '#666', cursor: 'pointer', fontSize: 8 }}>{s.label}</button>
+              ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* Timeline Control */}
-      <div style={{ position: 'absolute', bottom: 55, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '10px 16px', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', minWidth: 400 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <button onClick={() => setPlaying(!playing)} style={{ padding: 6, border: 'none', backgroundColor: playing ? '#ef4444' : '#22c55e', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {playing ? <Pause size={14} color="white" /> : <Play size={14} color="white" />}
-          </button>
-          
-          <span style={{ fontSize: 11, color: '#666' }}>Year:</span>
-          <input
-            type="range"
-            min={yearRange[0]}
-            max={yearRange[1]}
-            value={selectedYear || yearRange[1]}
-            onChange={e => setSelectedYear(parseInt(e.target.value))}
-            style={{ flex: 1 }}
-          />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', minWidth: 40 }}>{selectedYear || 'All'}</span>
-          
-          <button onClick={() => setSelectedYear(null)} style={{ padding: '4px 8px', border: 'none', backgroundColor: !selectedYear ? '#2563eb' : '#eee', color: !selectedYear ? 'white' : '#666', borderRadius: 4, cursor: 'pointer', fontSize: 10 }}>All Years</button>
+      {/* Current selection display */}
+      {(selectedYear || selectedSeason) && (
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+          <div style={{ backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: '12px 24px', borderRadius: 12, fontSize: 24, fontWeight: 700, textAlign: 'center' }}>
+            {selectedYear && <div>{selectedYear}</div>}
+            {selectedSeason && <div style={{ fontSize: 14, opacity: 0.8 }}>{SEASONS.find(s => s.id === selectedSeason)?.icon} {SEASONS.find(s => s.id === selectedSeason)?.name}</div>}
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{visibleFeatures.length.toLocaleString()} observations</div>
+          </div>
         </div>
-        
-        {/* Decade markers */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#999' }}>
-          {decades.map(d => (
-            <span key={d} style={{ cursor: 'pointer' }} onClick={() => setSelectedYear(d)}>{d}</span>
-          ))}
-        </div>
-      </div>
+      )}
 
-      <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '5px 16px', borderRadius: 12, boxShadow: '0 2px 6px rgba(0,0,0,0.1)', fontSize: 12 }}>🐝 Utah Pollinator Path • {visibleFeatures.length.toLocaleString()} observations</div>
+      {/* Bottom info bar */}
+      <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '8px 20px', borderRadius: 12, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: 16 }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>🐝 Utah Pollinator Path</span>
+        <span style={{ fontSize: 11, color: '#666' }}>📊 {wildlifeFeatures.length.toLocaleString()} total</span>
+        <span style={{ fontSize: 11, color: '#666' }}>📅 1871-2025</span>
+        <span style={{ fontSize: 11, color: '#888' }}>iNaturalist + GBIF</span>
+      </div>
     </div>
   );
 };
