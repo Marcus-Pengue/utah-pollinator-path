@@ -17,6 +17,7 @@ interface GardenRegistrationProps {
   existingGardens?: { lat: number; lng: number }[];
   opportunityZones?: { lat: number; lng: number }[];
   observations?: any[];
+  referralCode?: string;
 }
 
 // Xerces-based scoring weights
@@ -76,7 +77,8 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({
   lat, lng, onSubmit, onCancel,
   existingGardens = [],
   opportunityZones = [],
-  observations = []
+  observations = [],
+  referralCode = ''
 }) => {
   const [name, setName] = useState('');
   const [size, setSize] = useState('medium');
@@ -250,6 +252,7 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({
       inat_username: inatUsername,
       synced_observations: syncedObservations.map(o => o.inat_id),
       synced_obs_count: syncedObservations.length,
+      referral_code: referralCode,
     };
     await onSubmit(gardenData);
     setSubmittedData(gardenData);

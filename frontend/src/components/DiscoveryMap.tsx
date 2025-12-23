@@ -121,6 +121,18 @@ const DiscoveryMap: React.FC = () => {
   const [minConnectivity, setMinConnectivity] = useState(0);
   const [minObservations, setMinObservations] = useState(0);
   const [registerMode, setRegisterMode] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+
+  // Check for referral code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      setReferralCode(ref);
+      // Show a welcome message for referred users
+      console.log('Referred by:', ref);
+    }
+  }, []);
   const [pendingLocation, setPendingLocation] = useState<{lat: number, lng: number} | null>(null);
   const [selectedGarden, setSelectedGarden] = useState<Garden | null>(null);
   const [gardenSuccess, setGardenSuccess] = useState(false);
@@ -693,6 +705,7 @@ const DiscoveryMap: React.FC = () => {
             lng: f.geometry.coordinates[0]
           })) || []}
           observations={wildlifeFeatures}
+          referralCode={referralCode}
         />
       )}
 

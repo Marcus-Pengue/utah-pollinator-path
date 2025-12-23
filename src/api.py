@@ -802,6 +802,17 @@ def register_garden():
     """Register a new pollinator garden."""
     data = request.json
     
+    # Check for referral code
+    referred_by = None
+    ref_code = data.get('referral_code', '')
+    if ref_code:
+        gardens = load_gardens()
+        for g in gardens:
+            g_id = g.get('properties', {}).get('id', '')
+            if generate_referral_code(g_id) == ref_code.upper():
+                referred_by = g_id
+                break
+
     garden = {
         'type': 'Feature',
         'geometry': {
@@ -810,6 +821,7 @@ def register_garden():
         },
         'properties': {
             'id': f"garden_{int(time.time())}_{len(load_gardens())}",
+            'referred_by': referred_by,
             'name': data.get('name', 'Unnamed Garden'),
             'size': data.get('size', 'medium'),
             'plants': data.get('plants', []),
@@ -924,6 +936,105 @@ def garden_stats():
         'average_score': round(total_score / len(gardens), 1),
         'tiers': tiers,
         'top_plants': sorted(plant_counts.items(), key=lambda x: -x[1])[:5]
+    })
+
+
+
+# ============================================
+# REFERRAL SYSTEM
+# ============================================
+import string
+
+def generate_referral_code(garden_id):
+    """Generate a unique referral code for a garden."""
+    hash_obj = hashlib.md5(garden_id.encode())
+    return hash_obj.hexdigest()[:8].upper()
+
+def get_referral_stats(garden_id):
+    """Get referral statistics for a garden."""
+    gardens = load_gardens()
+    
+    # Find gardens referred by this one
+    referred = [g for g in gardens 
+                if g.get('properties', {}).get('referred_by') == garden_id]
+    
+    # Find the garden's location
+    garden = next((g for g in gardens if g.get('properties', {}).get('id') == garden_id), None)
+    if not garden:
+        return {'error': 'Garden not found'}
+    
+    coords = garden.get('geometry', {}).get('coordinates', [0, 0])
+    
+    # Find nearby gardens
+    nearby = []
+    for g in gardens:
+        g_coords = g.get('geometry', {}).get('coordinates', [0, 0])
+        # Simple distance calc (approximate)
+        lat_diff = (coords[1] - g_coords[1]) * 111000  # meters
+        lng_diff = (coords[0] - g_coords[0]) * 85000   # meters at ~40 lat
+        distance = (lat_diff**2 + lng_diff**2) ** 0.5
+        
+        if distance <= 1000 and g.get('properties', {}).get('id') != garden_id:
+            nearby.append({
+                'anonymous_id': generate_referral_code(g.get('properties', {}).get('id', '')),
+                'distance': round(distance),
+                'tier': g.get('properties', {}).get('tier', 'Seedling'),
+                'score': g.get('properties', {}).get('score', 0),
+                'is_referral': g.get('properties', {}).get('referred_by') == garden_id
+            })
+    
+    return {
+        'referral_code': generate_referral_code(garden_id),
+        'referred_count': len(referred),
+        'nearby_gardens': sorted(nearby, key=lambda x: x['distance'])
+    }
+
+@app.route('/api/referral/<garden_id>')
+def get_referral_info(garden_id):
+    """Get referral info for a garden."""
+    stats = get_referral_stats(garden_id)
+    return jsonify(stats)
+
+@app.route('/api/referral/validate/<code>')
+def validate_referral_code(code):
+    """Validate a referral code and return referrer info."""
+    gardens = load_gardens()
+    
+    for g in gardens:
+        g_id = g.get('properties', {}).get('id', '')
+        if generate_referral_code(g_id) == code.upper():
+            return jsonify({
+                'valid': True,
+                'referrer_tier': g.get('properties', {}).get('tier', 'Seedling'),
+                'referrer_anonymous_id': f"UPP-{code.upper()[:6]}"
+            })
+    
+    return jsonify({'valid': False})
+
+@app.route('/api/gardens/nearby')
+def get_nearby_gardens():
+    """Get gardens near a location."""
+    lat = float(request.args.get('lat', 0))
+    lng = float(request.args.get('lng', 0))
+    radius = float(request.args.get('radius', 1000))  # meters
+    
+    gardens = load_gardens()
+    nearby = []
+    
+    for g in gardens:
+        coords = g.get('geometry', {}).get('coordinates', [0, 0])
+        lat_diff = (lat - coords[1]) * 111000
+        lng_diff = (lng - coords[0]) * 85000
+        distance = (lat_diff**2 + lng_diff**2) ** 0.5
+        
+        if distance <= radius:
+            anon = anonymize_garden_for_public(g)
+            anon['properties']['distance'] = round(distance)
+            nearby.append(anon)
+    
+    return jsonify({
+        'type': 'FeatureCollection',
+        'features': sorted(nearby, key=lambda x: x['properties']['distance'])
     })
 
 
