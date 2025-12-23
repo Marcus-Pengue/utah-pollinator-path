@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import asyncio
 import json
+import time
 import os
 from datetime import datetime
 from typing import Dict, Any
@@ -659,6 +660,215 @@ def serve_static(path):
 
 
 # Download endpoints for full datasets
+
+# ============================================
+# GARDEN REGISTRATION SYSTEM
+# ============================================
+import csv
+from io import StringIO
+
+GARDENS_FILE = 'src/static/gardens.json'
+GARDENS_CSV_FILE = 'src/static/gardens_export.csv'
+
+def load_gardens():
+    """Load gardens from JSON file."""
+    if os.path.exists(GARDENS_FILE):
+        with open(GARDENS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_gardens(gardens):
+    """Save gardens to JSON file."""
+    os.makedirs(os.path.dirname(GARDENS_FILE), exist_ok=True)
+    with open(GARDENS_FILE, 'w') as f:
+        json.dump(gardens, f, indent=2)
+
+def export_gardens_csv():
+    """Export gardens to CSV format for Xerces submission."""
+    gardens = load_gardens()
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    
+    # Header row matching Xerces-style format
+    writer.writerow([
+        'Garden Name', 'Latitude', 'Longitude', 'Size', 
+        'Habitat Score', 'Certification Tier',
+        'Plants', 'Native Plant Count', 'Fall Bloomer Count',
+        'Features', 'Pesticide Free', 'Water Source',
+        'Description', 'Email', 'Registration Date'
+    ])
+    
+    for g in gardens:
+        props = g.get('properties', {})
+        plants = props.get('plants', [])
+        features = props.get('features', [])
+        
+        # Count natives and fall bloomers
+        native_plants = ['milkweed', 'goldenrod', 'aster', 'rabbitbrush', 'agastache', 'penstemon', 'coneflower']
+        fall_plants = ['goldenrod', 'aster', 'rabbitbrush', 'agastache']
+        native_count = len([p for p in plants if p in native_plants])
+        fall_count = len([p for p in plants if p in fall_plants])
+        
+        writer.writerow([
+            props.get('name', 'Unnamed Garden'),
+            g.get('geometry', {}).get('coordinates', [0, 0])[1],  # lat
+            g.get('geometry', {}).get('coordinates', [0, 0])[0],  # lng
+            props.get('size', 'unknown'),
+            props.get('score', 0),
+            props.get('tier', 'Seedling'),
+            '; '.join(plants),
+            native_count,
+            fall_count,
+            '; '.join(features),
+            'Yes' if 'no_pesticides' in features else 'No',
+            'Yes' if 'water' in features else 'No',
+            props.get('description', ''),
+            props.get('email', ''),
+            props.get('registered_at', '')
+        ])
+    
+    return output.getvalue()
+
+@app.route('/api/gardens', methods=['GET'])
+def get_gardens():
+    """Get all registered gardens as GeoJSON."""
+    gardens = load_gardens()
+    return jsonify({
+        'type': 'FeatureCollection',
+        'features': gardens
+    })
+
+@app.route('/api/gardens', methods=['POST'])
+def register_garden():
+    """Register a new pollinator garden."""
+    data = request.json
+    
+    garden = {
+        'type': 'Feature',
+        'geometry': {
+            'type': 'Point',
+            'coordinates': [data.get('lng'), data.get('lat')]
+        },
+        'properties': {
+            'id': f"garden_{int(time.time())}_{len(load_gardens())}",
+            'name': data.get('name', 'Unnamed Garden'),
+            'size': data.get('size', 'medium'),
+            'plants': data.get('plants', []),
+            'features': data.get('features', []),
+            'description': data.get('description', ''),
+            'email': data.get('email', ''),
+            'score': data.get('score', 0),
+            'tier': data.get('tier', 'Seedling'),
+            'registered_at': datetime.now().isoformat(),
+        }
+    }
+    
+    gardens = load_gardens()
+    gardens.append(garden)
+    save_gardens(gardens)
+    
+    return jsonify({
+        'success': True,
+        'garden': garden,
+        'total_gardens': len(gardens)
+    })
+
+@app.route('/api/gardens/export/csv')
+def export_gardens_csv_endpoint():
+    """Export all gardens as CSV for Xerces submission."""
+    csv_data = export_gardens_csv()
+    
+    response = app.response_class(
+        response=csv_data,
+        status=200,
+        mimetype='text/csv'
+    )
+    response.headers['Content-Disposition'] = f'attachment; filename=utah-pollinator-gardens-{datetime.now().strftime("%Y%m%d")}.csv'
+    return response
+
+@app.route('/api/gardens/export/xerces')
+def export_xerces_report():
+    """Export gardens in Xerces-compatible format with summary stats."""
+    gardens = load_gardens()
+    
+    # Calculate summary stats
+    total_score = sum(g.get('properties', {}).get('score', 0) for g in gardens)
+    total_area = sum({
+        'small': 50, 'medium': 250, 'large': 750
+    }.get(g.get('properties', {}).get('size', 'medium'), 250) for g in gardens)
+    
+    all_plants = []
+    all_features = []
+    for g in gardens:
+        all_plants.extend(g.get('properties', {}).get('plants', []))
+        all_features.extend(g.get('properties', {}).get('features', []))
+    
+    plant_counts = {}
+    for p in all_plants:
+        plant_counts[p] = plant_counts.get(p, 0) + 1
+    
+    feature_counts = {}
+    for f in all_features:
+        feature_counts[f] = feature_counts.get(f, 0) + 1
+    
+    # Tier distribution
+    tiers = {}
+    for g in gardens:
+        tier = g.get('properties', {}).get('tier', 'Seedling')
+        tiers[tier] = tiers.get(tier, 0) + 1
+    
+    return jsonify({
+        'report_date': datetime.now().isoformat(),
+        'region': 'Wasatch Front, Utah',
+        'summary': {
+            'total_gardens': len(gardens),
+            'total_habitat_score': total_score,
+            'estimated_area_sqft': total_area,
+            'average_score': round(total_score / len(gardens), 1) if gardens else 0,
+        },
+        'tier_distribution': tiers,
+        'top_plants': dict(sorted(plant_counts.items(), key=lambda x: -x[1])[:10]),
+        'feature_adoption': feature_counts,
+        'pesticide_free_count': feature_counts.get('no_pesticides', 0),
+        'fall_bloomer_gardens': len([g for g in gardens if any(p in ['goldenrod', 'aster', 'rabbitbrush'] for p in g.get('properties', {}).get('plants', []))]),
+        'gardens': gardens
+    })
+
+@app.route('/api/gardens/stats')
+def garden_stats():
+    """Get summary statistics for gardens."""
+    gardens = load_gardens()
+    
+    if not gardens:
+        return jsonify({
+            'total': 0,
+            'average_score': 0,
+            'tiers': {},
+            'top_plants': []
+        })
+    
+    total_score = sum(g.get('properties', {}).get('score', 0) for g in gardens)
+    
+    tiers = {}
+    all_plants = []
+    for g in gardens:
+        tier = g.get('properties', {}).get('tier', 'Seedling')
+        tiers[tier] = tiers.get(tier, 0) + 1
+        all_plants.extend(g.get('properties', {}).get('plants', []))
+    
+    plant_counts = {}
+    for p in all_plants:
+        plant_counts[p] = plant_counts.get(p, 0) + 1
+    
+    return jsonify({
+        'total': len(gardens),
+        'average_score': round(total_score / len(gardens), 1),
+        'tiers': tiers,
+        'top_plants': sorted(plant_counts.items(), key=lambda x: -x[1])[:5]
+    })
+
+
 @app.route('/api/downloads/full-json')
 def download_full_json():
     """Download full Utah dataset as gzipped JSON"""

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, Flower2, Droplets, Home, TreeDeciduous, Check } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import XercesReportGenerator from './XercesReportGenerator';
+import { X, Flower2, Droplets, Home, TreeDeciduous, Check, Star, Award, Info } from 'lucide-react';
 
 interface GardenRegistrationProps {
   lat: number;
@@ -8,35 +9,70 @@ interface GardenRegistrationProps {
   onCancel: () => void;
 }
 
+// Xerces-based scoring weights
+const SCORING_WEIGHTS = {
+  floralResources: 0.35,  // 35%
+  nestingSites: 0.30,     // 30%
+  connectivity: 0.20,     // 20% (calculated separately based on location)
+  habitatQuality: 0.15,   // 15%
+};
+
+// Plants with point values - fall bloomers get 1.5x multiplier per Xerces research
 const PLANT_OPTIONS = [
-  { id: 'milkweed', name: 'Milkweed', icon: '🌸', desc: 'Essential for monarchs' },
-  { id: 'lavender', name: 'Lavender', icon: '💜', desc: 'Bees love it' },
-  { id: 'sunflower', name: 'Sunflowers', icon: '🌻', desc: 'Seeds & pollen' },
-  { id: 'coneflower', name: 'Coneflower', icon: '🌺', desc: 'Native perennial' },
-  { id: 'bee_balm', name: 'Bee Balm', icon: '🌷', desc: 'Hummingbirds too' },
-  { id: 'salvia', name: 'Salvia', icon: '💙', desc: 'Long blooming' },
-  { id: 'aster', name: 'Asters', icon: '⭐', desc: 'Fall blooms' },
-  { id: 'goldenrod', name: 'Goldenrod', icon: '💛', desc: 'Late season food' },
-  { id: 'clover', name: 'Clover', icon: '🍀', desc: 'Ground cover' },
-  { id: 'herbs', name: 'Herbs', icon: '🌿', desc: 'Basil, mint, thyme' },
+  { id: 'milkweed', name: 'Milkweed', icon: '🌸', desc: 'Essential for monarchs', points: 15, native: true, season: 'summer' },
+  { id: 'goldenrod', name: 'Goldenrod', icon: '💛', desc: 'Critical fall food', points: 20, native: true, season: 'fall', priority: true },
+  { id: 'aster', name: 'Asters', icon: '⭐', desc: 'Fall blooms', points: 18, native: true, season: 'fall', priority: true },
+  { id: 'rabbitbrush', name: 'Rabbitbrush', icon: '🌾', desc: 'Utah native fall bloomer', points: 20, native: true, season: 'fall', priority: true },
+  { id: 'agastache', name: 'Agastache', icon: '💜', desc: 'Blooms June-October', points: 18, native: true, season: 'summer-fall' },
+  { id: 'penstemon', name: 'Penstemon', icon: '🔴', desc: 'Utah native', points: 15, native: true, season: 'spring-summer' },
+  { id: 'coneflower', name: 'Coneflower', icon: '🌺', desc: 'Native perennial', points: 12, native: true, season: 'summer' },
+  { id: 'bee_balm', name: 'Bee Balm', icon: '🌷', desc: 'Hummingbirds too', points: 12, native: false, season: 'summer' },
+  { id: 'lavender', name: 'Lavender', icon: '💐', desc: 'Bees love it', points: 8, native: false, season: 'summer' },
+  { id: 'sunflower', name: 'Sunflowers', icon: '🌻', desc: 'Seeds & pollen', points: 10, native: false, season: 'summer' },
+  { id: 'salvia', name: 'Salvia', icon: '💙', desc: 'Long blooming', points: 10, native: false, season: 'summer' },
+  { id: 'clover', name: 'Clover', icon: '🍀', desc: 'Ground cover', points: 6, native: false, season: 'spring-summer' },
+  { id: 'herbs', name: 'Flowering Herbs', icon: '🌿', desc: 'Basil, mint, thyme', points: 5, native: false, season: 'summer' },
 ];
 
+// Features with point values based on Xerces nesting/habitat criteria
 const FEATURE_OPTIONS = [
-  { id: 'water', name: 'Water Source', icon: <Droplets size={16} /> },
-  { id: 'nesting', name: 'Nesting Sites', icon: <Home size={16} /> },
-  { id: 'trees', name: 'Trees/Shrubs', icon: <TreeDeciduous size={16} /> },
-  { id: 'no_pesticides', name: 'Pesticide-Free', icon: '🚫' },
-  { id: 'native', name: 'Native Plants', icon: '🏔️' },
+  { id: 'water', name: 'Water Source', icon: <Droplets size={16} />, points: 25, category: 'nesting', desc: 'Shallow water for bees' },
+  { id: 'bare_ground', name: 'Bare Ground Patches', icon: '🏜️', points: 20, category: 'nesting', desc: '70% of bees nest in ground' },
+  { id: 'brush_pile', name: 'Brush/Log Pile', icon: '🪵', points: 15, category: 'nesting', desc: 'Cavity nesting sites' },
+  { id: 'bee_hotel', name: 'Bee Hotel', icon: '🏨', points: 12, category: 'nesting', desc: 'Solitary bee nesting' },
+  { id: 'undisturbed', name: 'Undisturbed Area', icon: '🌾', points: 18, category: 'nesting', desc: 'Left wild year-round' },
+  { id: 'trees', name: 'Trees/Shrubs', icon: <TreeDeciduous size={16} />, points: 15, category: 'habitat', desc: 'Shelter & nesting' },
+  { id: 'no_pesticides', name: 'Pesticide-Free', icon: '🚫', points: 30, category: 'habitat', desc: 'Critical for pollinator health' },
+  { id: 'native_majority', name: '50%+ Native Plants', icon: '🏔️', points: 25, category: 'habitat', desc: 'Adapted to local pollinators' },
+  { id: 'mulch_leaves', name: 'Leaf Litter/Mulch', icon: '🍂', points: 10, category: 'nesting', desc: 'Overwintering habitat' },
 ];
+
+// Size multipliers
+const SIZE_MULTIPLIERS = {
+  small: 1.0,    // < 100 sq ft
+  medium: 1.5,   // 100-500 sq ft
+  large: 2.0,    // 500+ sq ft
+};
+
+// Seasonal coverage bonus
+const SEASONAL_BONUS = {
+  spring: 10,
+  summer: 10,
+  fall: 25,  // Extra points for fall (84.5% September deficit)
+  winter: 5,
+};
 
 const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSubmit, onCancel }) => {
   const [name, setName] = useState('');
-  const [size, setSize] = useState('small');
+  const [size, setSize] = useState('medium');
   const [selectedPlants, setSelectedPlants] = useState<string[]>([]);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showReportGenerator, setShowReportGenerator] = useState(false);
+  const [submittedData, setSubmittedData] = useState<any>(null);
+  const [showScoreDetails, setShowScoreDetails] = useState(false);
 
   const togglePlant = (id: string) => {
     setSelectedPlants(prev => 
@@ -50,9 +86,106 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
     );
   };
 
+  // Calculate score based on Xerces methodology
+  const scoreDetails = useMemo(() => {
+    // Floral resources score
+    let floralScore = 0;
+    let nativeCount = 0;
+    let fallBloomerCount = 0;
+    const seasons = new Set<string>();
+    
+    selectedPlants.forEach(plantId => {
+      const plant = PLANT_OPTIONS.find(p => p.id === plantId);
+      if (plant) {
+        floralScore += plant.points;
+        if (plant.native) nativeCount++;
+        if (plant.season.includes('fall')) fallBloomerCount++;
+        plant.season.split('-').forEach(s => seasons.add(s));
+      }
+    });
+
+    // Diversity bonus
+    const diversityBonus = Math.min(selectedPlants.length * 3, 30);
+    floralScore += diversityBonus;
+
+    // Fall bloomer bonus (critical for September deficit)
+    const fallBonus = fallBloomerCount >= 3 ? 40 : fallBloomerCount * 10;
+    floralScore += fallBonus;
+
+    // Nesting score
+    let nestingScore = 0;
+    selectedFeatures.filter(f => {
+      const feature = FEATURE_OPTIONS.find(fo => fo.id === f);
+      return feature?.category === 'nesting';
+    }).forEach(f => {
+      const feature = FEATURE_OPTIONS.find(fo => fo.id === f);
+      if (feature) nestingScore += feature.points;
+    });
+
+    // Habitat quality score
+    let habitatScore = 0;
+    selectedFeatures.filter(f => {
+      const feature = FEATURE_OPTIONS.find(fo => fo.id === f);
+      return feature?.category === 'habitat';
+    }).forEach(f => {
+      const feature = FEATURE_OPTIONS.find(fo => fo.id === f);
+      if (feature) habitatScore += feature.points;
+    });
+
+    // Native plant percentage bonus
+    if (selectedPlants.length > 0) {
+      const nativePercent = nativeCount / selectedPlants.length;
+      if (nativePercent >= 0.75) habitatScore += 25;
+      else if (nativePercent >= 0.5) habitatScore += 15;
+    }
+
+    // Seasonal coverage bonus
+    let seasonalBonus = 0;
+    seasons.forEach(s => {
+      seasonalBonus += SEASONAL_BONUS[s as keyof typeof SEASONAL_BONUS] || 0;
+    });
+
+    // Apply size multiplier
+    const sizeMultiplier = SIZE_MULTIPLIERS[size as keyof typeof SIZE_MULTIPLIERS];
+
+    // Calculate weighted total (before size multiplier)
+    const rawScore = (
+      floralScore * SCORING_WEIGHTS.floralResources +
+      nestingScore * SCORING_WEIGHTS.nestingSites +
+      habitatScore * SCORING_WEIGHTS.habitatQuality +
+      seasonalBonus
+    );
+
+    const totalScore = Math.round(rawScore * sizeMultiplier);
+
+    // Determine tier
+    let tier = 'Seedling';
+    let tierColor = '#94a3b8';
+    if (totalScore >= 200) { tier = 'Pollinator Champion'; tierColor = '#eab308'; }
+    else if (totalScore >= 150) { tier = 'Habitat Hero'; tierColor = '#8b5cf6'; }
+    else if (totalScore >= 100) { tier = 'Bee Friendly'; tierColor = '#22c55e'; }
+    else if (totalScore >= 50) { tier = 'Growing'; tierColor = '#3b82f6'; }
+
+    return {
+      floralScore: Math.round(floralScore * SCORING_WEIGHTS.floralResources),
+      nestingScore: Math.round(nestingScore * SCORING_WEIGHTS.nestingSites),
+      habitatScore: Math.round(habitatScore * SCORING_WEIGHTS.habitatQuality),
+      seasonalBonus,
+      fallBonus,
+      diversityBonus,
+      sizeMultiplier,
+      totalScore,
+      tier,
+      tierColor,
+      fallBloomerCount,
+      nativeCount,
+      seasonsCovered: seasons.size,
+    };
+  }, [selectedPlants, selectedFeatures, size]);
+
   const handleSubmit = async () => {
     setSubmitting(true);
-    await onSubmit({
+    const gardenData = {
       lat,
       lng,
       name: name || 'My Pollinator Garden',
@@ -60,9 +193,14 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
       plants: selectedPlants,
       features: selectedFeatures,
       description,
-      email
-    });
+      email,
+      score: scoreDetails.totalScore,
+      tier: scoreDetails.tier,
+    };
+    await onSubmit(gardenData);
+    setSubmittedData(gardenData);
     setSubmitting(false);
+    setShowReportGenerator(true);
   };
 
   return (
@@ -82,7 +220,7 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
       <div style={{
         backgroundColor: 'white',
         borderRadius: 16,
-        maxWidth: 500,
+        maxWidth: 560,
         width: '100%',
         maxHeight: '90vh',
         overflow: 'auto',
@@ -102,11 +240,86 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Flower2 size={24} color="#22c55e" />
-            <h2 style={{ margin: 0, fontSize: 18 }}>Register Your Garden</h2>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18 }}>Register Your Garden</h2>
+              <div style={{ fontSize: 11, color: '#666' }}>Xerces Society Scoring System</div>
+            </div>
           </div>
           <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
             <X size={24} color="#666" />
           </button>
+        </div>
+
+        {/* Live Score Display */}
+        <div style={{
+          background: `linear-gradient(135deg, ${scoreDetails.tierColor}15 0%, ${scoreDetails.tierColor}30 100%)`,
+          padding: '16px 20px',
+          borderBottom: `3px solid ${scoreDetails.tierColor}`,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>HABITAT SCORE</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 36, fontWeight: 700, color: scoreDetails.tierColor }}>
+                  {scoreDetails.totalScore}
+                </span>
+                <span style={{ fontSize: 14, color: '#666' }}>points</span>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                color: scoreDetails.tierColor,
+                fontWeight: 600,
+                fontSize: 16
+              }}>
+                <Award size={20} />
+                {scoreDetails.tier}
+              </div>
+              <button 
+                onClick={() => setShowScoreDetails(!showScoreDetails)}
+                style={{ 
+                  fontSize: 11, 
+                  color: '#666', 
+                  background: 'none', 
+                  border: 'none', 
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                {showScoreDetails ? 'Hide details' : 'See breakdown'}
+              </button>
+            </div>
+          </div>
+
+          {/* Score Breakdown */}
+          {showScoreDetails && (
+            <div style={{ 
+              marginTop: 12, 
+              padding: 12, 
+              backgroundColor: 'white', 
+              borderRadius: 8,
+              fontSize: 12
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>🌸 Floral Resources: <strong>{scoreDetails.floralScore}</strong></div>
+                <div>🏠 Nesting Sites: <strong>{scoreDetails.nestingScore}</strong></div>
+                <div>🌿 Habitat Quality: <strong>{scoreDetails.habitatScore}</strong></div>
+                <div>📅 Seasonal Coverage: <strong>+{scoreDetails.seasonalBonus}</strong></div>
+              </div>
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #eee' }}>
+                <div>📐 Size multiplier: <strong>{scoreDetails.sizeMultiplier}x</strong></div>
+                {scoreDetails.fallBloomerCount >= 1 && (
+                  <div style={{ color: '#ea580c' }}>
+                    🍂 Fall bloomer bonus: <strong>+{scoreDetails.fallBonus}</strong> 
+                    <span style={{ fontSize: 10, marginLeft: 4 }}>(addressing Sept. nectar deficit)</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ padding: 20 }}>
@@ -146,13 +359,13 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
           {/* Size */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              Garden Size
+              Garden Size <span style={{ fontWeight: 400, color: '#666' }}>(affects score multiplier)</span>
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
               {[
-                { id: 'small', label: 'Small', desc: '< 100 sq ft' },
-                { id: 'medium', label: 'Medium', desc: '100-500 sq ft' },
-                { id: 'large', label: 'Large', desc: '500+ sq ft' }
+                { id: 'small', label: 'Small', desc: '< 100 sq ft', mult: '1x' },
+                { id: 'medium', label: 'Medium', desc: '100-500 sq ft', mult: '1.5x' },
+                { id: 'large', label: 'Large', desc: '500+ sq ft', mult: '2x' }
               ].map(s => (
                 <button
                   key={s.id}
@@ -169,18 +382,76 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
                 >
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{s.label}</div>
                   <div style={{ fontSize: 10, color: '#666' }}>{s.desc}</div>
+                  <div style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>{s.mult}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Plants */}
+          {/* Priority Fall Plants */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              What's growing? <span style={{ fontWeight: 400, color: '#666' }}>(select all that apply)</span>
+              <span style={{ color: '#ea580c' }}>🍂 Priority: Fall Bloomers</span>
+              <span style={{ fontWeight: 400, color: '#666', marginLeft: 8 }}>
+                (84.5% September nectar deficit in Utah)
+              </span>
+            </label>
+            <div style={{ 
+              backgroundColor: '#fff7ed', 
+              padding: 8, 
+              borderRadius: 8, 
+              marginBottom: 8,
+              fontSize: 11,
+              color: '#9a3412',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <Info size={14} />
+              Fall blooming plants earn bonus points - select 3+ for maximum benefit!
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {PLANT_OPTIONS.filter(p => p.season.includes('fall')).map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => togglePlant(p.id)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 20,
+                    border: selectedPlants.includes(p.id) ? '2px solid #ea580c' : '1px solid #fed7aa',
+                    backgroundColor: selectedPlants.includes(p.id) ? '#fff7ed' : 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12
+                  }}
+                  title={p.desc}
+                >
+                  <span>{p.icon}</span>
+                  <span>{p.name}</span>
+                  <span style={{ 
+                    fontSize: 9, 
+                    backgroundColor: '#fdba74', 
+                    color: '#9a3412',
+                    padding: '1px 4px', 
+                    borderRadius: 4 
+                  }}>
+                    +{p.points}
+                  </span>
+                  {selectedPlants.includes(p.id) && <Check size={12} color="#ea580c" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Other Plants */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              🌸 Other Pollinator Plants
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {PLANT_OPTIONS.map(p => (
+              {PLANT_OPTIONS.filter(p => !p.season.includes('fall')).map(p => (
                 <button
                   key={p.id}
                   onClick={() => togglePlant(p.id)}
@@ -199,37 +470,73 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
                 >
                   <span>{p.icon}</span>
                   <span>{p.name}</span>
+                  {p.native && <span style={{ fontSize: 9, color: '#166534' }}>native</span>}
+                  <span style={{ fontSize: 9, color: '#22c55e' }}>+{p.points}</span>
                   {selectedPlants.includes(p.id) && <Check size={12} color="#22c55e" />}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Features */}
+          {/* Features - Nesting */}
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              Garden Features
+              🏠 Nesting Resources <span style={{ fontWeight: 400, color: '#666' }}>(30% of score)</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {FEATURE_OPTIONS.map(f => (
+              {FEATURE_OPTIONS.filter(f => f.category === 'nesting').map(f => (
                 <button
                   key={f.id}
                   onClick={() => toggleFeature(f.id)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '8px 12px',
                     borderRadius: 20,
                     border: selectedFeatures.includes(f.id) ? '2px solid #8b5cf6' : '1px solid #ddd',
                     backgroundColor: selectedFeatures.includes(f.id) ? '#f5f3ff' : 'white',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 6,
                     fontSize: 12
                   }}
+                  title={f.desc}
                 >
                   <span>{typeof f.icon === 'string' ? f.icon : f.icon}</span>
                   <span>{f.name}</span>
+                  <span style={{ fontSize: 9, color: '#8b5cf6' }}>+{f.points}</span>
                   {selectedFeatures.includes(f.id) && <Check size={12} color="#8b5cf6" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Features - Habitat */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              🌿 Habitat Quality <span style={{ fontWeight: 400, color: '#666' }}>(15% of score)</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {FEATURE_OPTIONS.filter(f => f.category === 'habitat').map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => toggleFeature(f.id)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 20,
+                    border: selectedFeatures.includes(f.id) ? '2px solid #059669' : '1px solid #ddd',
+                    backgroundColor: selectedFeatures.includes(f.id) ? '#ecfdf5' : 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 12
+                  }}
+                  title={f.desc}
+                >
+                  <span>{typeof f.icon === 'string' ? f.icon : f.icon}</span>
+                  <span>{f.name}</span>
+                  <span style={{ fontSize: 9, color: '#059669' }}>+{f.points}</span>
+                  {selectedFeatures.includes(f.id) && <Check size={12} color="#059669" />}
                 </button>
               ))}
             </div>
@@ -278,6 +585,41 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
             />
           </div>
 
+          {/* Tier Progress */}
+          <div style={{ 
+            backgroundColor: '#f8fafc', 
+            padding: 12, 
+            borderRadius: 8, 
+            marginBottom: 16 
+          }}>
+            <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>CERTIFICATION TIERS</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[
+                { name: 'Seedling', min: 0, color: '#94a3b8' },
+                { name: 'Growing', min: 50, color: '#3b82f6' },
+                { name: 'Bee Friendly', min: 100, color: '#22c55e' },
+                { name: 'Habitat Hero', min: 150, color: '#8b5cf6' },
+                { name: 'Champion', min: 200, color: '#eab308' },
+              ].map((tier, i) => (
+                <div 
+                  key={tier.name}
+                  style={{ 
+                    flex: 1,
+                    padding: '6px 4px',
+                    backgroundColor: scoreDetails.totalScore >= tier.min ? tier.color : '#e2e8f0',
+                    borderRadius: 4,
+                    textAlign: 'center',
+                    fontSize: 9,
+                    color: scoreDetails.totalScore >= tier.min ? 'white' : '#94a3b8',
+                    fontWeight: scoreDetails.tier === tier.name ? 700 : 400,
+                  }}
+                >
+                  {tier.name}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Submit */}
           <button
             onClick={handleSubmit}
@@ -287,7 +629,7 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
               padding: '14px 20px',
               borderRadius: 10,
               border: 'none',
-              backgroundColor: '#22c55e',
+              backgroundColor: scoreDetails.tierColor,
               color: 'white',
               fontSize: 16,
               fontWeight: 600,
@@ -299,8 +641,8 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
               gap: 8
             }}
           >
-            <Flower2 size={20} />
-            {submitting ? 'Registering...' : 'Register Garden'}
+            <Award size={20} />
+            {submitting ? 'Registering...' : `Register as ${scoreDetails.tier} (${scoreDetails.totalScore} pts)`}
           </button>
 
           <p style={{ 
@@ -309,10 +651,21 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({ lat, lng, onSub
             color: '#888', 
             marginTop: 12 
           }}>
-            Your garden will appear on the map and help track the pollinator corridor! 🦋
+            Scoring based on Xerces Society habitat assessment methodology 🦋
           </p>
         </div>
       </div>
+
+      {/* Xerces Report Generator Modal */}
+      {showReportGenerator && submittedData && (
+        <XercesReportGenerator
+          gardenData={submittedData}
+          onClose={() => {
+            setShowReportGenerator(false);
+            onCancel(); // Close the whole registration modal
+          }}
+        />
+      )}
     </div>
   );
 };
