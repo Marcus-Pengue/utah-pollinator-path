@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
-import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare, Plus, Flower2 } from 'lucide-react';
+import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare, Plus, Flower2, Download } from 'lucide-react';
 import { api } from '../api/client';
 import GardenRegistration from './GardenRegistration';
 import SpeciesSearch from './SpeciesSearch';
@@ -587,6 +587,48 @@ const DiscoveryMap: React.FC = () => {
         }}>
           🌻 Garden registered successfully! Thank you for supporting pollinators.
         </div>
+      )}
+
+      {/* Quick Download Button */}
+      {!compareMode && (
+        <button
+          onClick={() => {
+            const data = {
+              type: 'FeatureCollection',
+              generated: new Date().toISOString(),
+              observations: leftFeatures.length,
+              features: leftFeatures,
+            };
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `utah-pollinator-${leftFeatures.length}-obs.geojson`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          style={{
+            position: 'absolute',
+            bottom: 80,
+            right: 180,
+            backgroundColor: '#3b82f6',
+            color: 'white',
+            padding: '12px 16px',
+            borderRadius: 12,
+            border: 'none',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(59,130,246,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            zIndex: 200
+          }}
+        >
+          <Download size={16} />
+          Export
+        </button>
       )}
 
       {/* Register Garden Button */}

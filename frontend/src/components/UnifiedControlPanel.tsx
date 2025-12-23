@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Filter, X, ChevronDown, ChevronUp, Calendar, MapPin, 
   Layers, Trophy, BarChart3, Play, Pause, GitCompare,
-  Eye, EyeOff, Keyboard
+  Eye, EyeOff, Keyboard, Download
 } from 'lucide-react';
 
 interface UnifiedControlPanelProps {
@@ -499,6 +499,97 @@ const UnifiedControlPanel: React.FC<UnifiedControlPanelProps> = (props) => {
                       <span style={{ fontSize: 9, color: '#999', marginLeft: 8 }}>{city.zones} zones</span>
                     </div>
                   ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Export Section */}
+            {renderSection('export', <Download size={14} />, 'Export Data', (
+              <div>
+                {/* Current Filtered View */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 6, textTransform: 'uppercase' }}>
+                  Current Filtered View
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                  <button
+                    onClick={() => {
+                      const data = {
+                        type: 'FeatureCollection',
+                        generated: new Date().toISOString(),
+                        filter: { species: props.selectedSpecies, city: props.selectedCity, year: props.selectedYear, season: props.selectedSeason },
+                        features: props.filteredFeatures,
+                      };
+                      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `utah-pollinator-${props.filteredFeatures.length}-obs.geojson`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    style={{ flex: 1, padding: '8px', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+                  >
+                    <Download size={14} />
+                    <span>GeoJSON</span>
+                    <span style={{ fontSize: 9, color: '#059669', fontWeight: 600 }}>{props.filteredFeatures.length.toLocaleString()}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const headers = ['species', 'common_name', 'latitude', 'longitude', 'year', 'month', 'source', 'taxon'];
+                      const rows = props.filteredFeatures.map((f: any) => [
+                        f.properties?.species || '', f.properties?.common_name || '',
+                        f.geometry?.coordinates?.[1] || '', f.geometry?.coordinates?.[0] || '',
+                        f.properties?.year || '', f.properties?.month || '',
+                        f.properties?.source || '', f.properties?.iconic_taxon || '',
+                      ].join(','));
+                      const csv = [headers.join(','), ...rows].join('\n');
+                      const blob = new Blob([csv], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `utah-pollinator-${props.filteredFeatures.length}-obs.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    style={{ flex: 1, padding: '8px', borderRadius: 6, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: 11, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+                  >
+                    <Download size={14} />
+                    <span>CSV</span>
+                    <span style={{ fontSize: 9, color: '#666' }}>Spreadsheet</span>
+                  </button>
+                </div>
+
+                {/* Full Utah Dataset */}
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', marginBottom: 6, textTransform: 'uppercase' }}>
+                  Full Utah Dataset (311,039 obs)
+                </div>
+                <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: '#166534', marginBottom: 8 }}>
+                    Complete statewide data for research & government use
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => window.open('https://utah-pollinator-path.onrender.com/api/downloads/full-json', '_blank')}
+                      style={{ flex: 1, padding: '10px 8px', borderRadius: 6, border: 'none', background: '#059669', color: 'white', cursor: 'pointer', fontSize: 11, fontWeight: 500, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+                    >
+                      <Download size={14} />
+                      <span>GeoJSON.gz</span>
+                      <span style={{ fontSize: 9, opacity: 0.8 }}>~25 MB</span>
+                    </button>
+                    <button
+                      onClick={() => window.open('https://utah-pollinator-path.onrender.com/api/downloads/full-csv', '_blank')}
+                      style={{ flex: 1, padding: '10px 8px', borderRadius: 6, border: 'none', background: '#059669', color: 'white', cursor: 'pointer', fontSize: 11, fontWeight: 500, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
+                    >
+                      <Download size={14} />
+                      <span>CSV.gz</span>
+                      <span style={{ fontSize: 9, opacity: 0.8 }}>~8 MB</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 9, color: '#6b7280', textAlign: 'center' }}>
+                  📊 Sources: iNaturalist (2016-2025) + GBIF (1871-2025)<br/>
+                  🔬 For academic use: cite "Utah Pollinator Path"
                 </div>
               </div>
             ))}

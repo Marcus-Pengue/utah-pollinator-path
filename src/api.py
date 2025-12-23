@@ -657,6 +657,49 @@ def serve_static(path):
     return app.send_static_file(path)
 
 
+
+# Download endpoints for full datasets
+@app.route('/api/downloads/full-json')
+def download_full_json():
+    """Download full Utah dataset as gzipped JSON"""
+    return send_from_directory(
+        'static/downloads', 
+        'utah_full_cache.json.gz',
+        mimetype='application/gzip',
+        as_attachment=True,
+        download_name='utah-pollinator-311k-observations.json.gz'
+    )
+
+@app.route('/api/downloads/full-csv')
+def download_full_csv():
+    """Download full Utah dataset as gzipped CSV"""
+    return send_from_directory(
+        'static/downloads', 
+        'utah_full_cache.csv.gz',
+        mimetype='application/gzip',
+        as_attachment=True,
+        download_name='utah-pollinator-311k-observations.csv.gz'
+    )
+
+@app.route('/api/downloads/info')
+def download_info():
+    """Get info about available downloads"""
+    import os
+    return jsonify({
+        'full_json': {
+            'observations': 311039,
+            'size_mb': round(os.path.getsize('src/static/downloads/utah_full_cache.json.gz') / (1024*1024), 1),
+            'format': 'GeoJSON (gzipped)',
+            'url': '/api/downloads/full-json'
+        },
+        'full_csv': {
+            'observations': 311039,
+            'size_mb': round(os.path.getsize('src/static/downloads/utah_full_cache.csv.gz') / (1024*1024), 1),
+            'format': 'CSV (gzipped)',
+            'url': '/api/downloads/full-csv'
+        }
+    })
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     get_engine()
