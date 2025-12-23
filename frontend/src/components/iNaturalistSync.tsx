@@ -35,7 +35,7 @@ const TAXON_ICONS: Record<string, React.ReactNode> = {
   Arachnida: '🕷️',
 };
 
-const iNaturalistSync: React.FC<iNaturalistSyncProps> = ({
+const INaturalistSync: React.FC<iNaturalistSyncProps> = ({
   propertyLat,
   propertyLng,
   radiusMeters = 500,
@@ -400,4 +400,4 @@ const iNaturalistSync: React.FC<iNaturalistSyncProps> = ({
   );
 };
 
-export default iNaturalistSync;
+export default INaturalistSync;

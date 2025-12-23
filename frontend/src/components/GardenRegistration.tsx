@@ -5,7 +5,7 @@ import {
   getPropertyObservationStats,
   ConnectivityResult 
 } from './ConnectivityScoring';
-import iNaturalistSync, { SyncedObservation } from './iNaturalistSync';
+import INaturalistSync, { SyncedObservation } from './INaturalistSync';
 import { PRIVACY_NOTICE, DATA_VISIBILITY } from './PrivacyUtils';
 import { X, Flower2, Droplets, Home, TreeDeciduous, Check, Star, Award, Info } from 'lucide-react';
 
@@ -487,11 +487,11 @@ const GardenRegistration: React.FC<GardenRegistrationProps> = ({
           </div>
 
           {/* iNaturalist Sync */}
-          <iNaturalistSync
+          <INaturalistSync
             propertyLat={lat}
             propertyLng={lng}
             radiusMeters={500}
-            onSyncComplete={(obs) => setSyncedObservations(obs)}
+            onSyncComplete={(obs: SyncedObservation[]) => setSyncedObservations(obs)}
             existingObservations={syncedObservations}
           />
 

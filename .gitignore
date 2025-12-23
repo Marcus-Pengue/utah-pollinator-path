@@ -5,3 +5,10 @@ __pycache__/
 .env
 .DS_Store
 .cache/
+
+# Large data files (use Git LFS or download separately)
+data/full_cache/utah_full_cache.json
+data/full_cache/*.json
+data/expanded_cache/*.json
+*.json.gz
+!src/static/downloads/*.gz
