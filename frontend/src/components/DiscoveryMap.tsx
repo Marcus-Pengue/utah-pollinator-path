@@ -139,8 +139,26 @@ const DiscoveryMap: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('homeowner');
   const [selectedTaxa, setSelectedTaxa] = useState<string[]>(['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']);
   const [showLayers, setShowLayers] = useState({ observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false });
+
+  // Sync selectedTaxa with wildlifeFilters visibility
+  useEffect(() => {
+    setWildlifeFilters(prev => prev.map(f => ({
+      ...f,
+      visible: selectedTaxa.includes(f.id)
+    })));
+  }, [selectedTaxa]);
+
+  // Sync showLayers with individual layer states
+  useEffect(() => {
+    setShowGardens(showLayers.gardens);
+    setShowOpportunityZones(showLayers.opportunityZones);
+  }, [showLayers.gardens, showLayers.opportunityZones]);
+
+
+
   const [controlsVisible, setControlsVisible] = useState(true);
-  // Sample leaderboard data (will be replaced with real API data)
+
+  const mapRef = useRef<any>(null);  // Sample leaderboard data (will be replaced with real API data)
   const sampleGardens = [
     { id: 'g1', anonymousId: 'A3F2K1', city: 'Salt Lake City', score: 245, verifiedScore: 367, tier: 'Pollinator Champion', plantCount: 12, nativePlantCount: 9, fallBloomerCount: 4, observationCount: 28, referralCount: 5, verificationLevel: 'professional' as const, registeredAt: '2025-10-15' },
     { id: 'g2', anonymousId: 'B7H9M2', city: 'Salt Lake City', score: 198, verifiedScore: 247, tier: 'Habitat Hero', plantCount: 10, nativePlantCount: 7, fallBloomerCount: 3, observationCount: 15, referralCount: 2, verificationLevel: 'community' as const, registeredAt: '2025-11-02' },
@@ -178,6 +196,46 @@ const DiscoveryMap: React.FC = () => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
+
+  // Compute filtered observation count based on selected taxa
+  const filteredObservationCount = useMemo(() => {
+    if (!wildlifeFeatures) return 0;
+    if (selectedTaxa.length === 0) return 0;
+    if (selectedTaxa.length === 8) return wildlifeFeatures.length;
+    return wildlifeFeatures.filter((f: Feature) => 
+      selectedTaxa.includes(f.properties?.taxon)
+    ).length;
+  }, [wildlifeFeatures, selectedTaxa]);
+
+
+  
+
+  // === MAP LAYER CONTROLS ===
+  // City filter - fly to selected city
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current.getMap();
+    if (!map) return;
+    
+    const cityCoords: Record<string, [number, number, number]> = {
+      'Salt Lake City': [-111.891, 40.7608, 11],
+      'Murray': [-111.888, 40.6669, 12],
+      'Sandy': [-111.8507, 40.5649, 12],
+      'West Valley City': [-112.001, 40.6916, 12],
+      'Provo': [-111.6585, 40.2338, 12],
+      'Ogden': [-111.9738, 41.223, 12],
+      'Draper': [-111.8638, 40.5246, 12],
+      'Taylorsville': [-111.9388, 40.6677, 12],
+    };
+    
+    if (selectedCity && cityCoords[selectedCity]) {
+      const [lng, lat, zoom] = cityCoords[selectedCity];
+      map.flyTo({ center: [lng, lat], zoom, duration: 1500 });
+    }
+  }, [selectedCity]);
+
+
+  
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -421,7 +479,7 @@ const DiscoveryMap: React.FC = () => {
       
       {/* Left map */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', clipPath: compareMode ? `inset(0 ${100 - sliderPosition}% 0 0)` : 'none' }}>
-        <MapGL 
+        <MapGL ref={mapRef} 
           {...viewState} 
           onMove={e => setViewState(e.viewState)} 
           onClick={handleMapClick}
@@ -828,7 +886,7 @@ const DiscoveryMap: React.FC = () => {
           onCityChange={setSelectedCity}
           yearRange={[2000, 2025]}
           onYearRangeChange={() => {}}
-          observationCount={wildlifeFeatures?.length || 0}
+          observationCount={filteredObservationCount}
           gardenCount={gardens?.length || 0}
           onOpenLeaderboard={() => setShowLeaderboard(true)}
           onOpenDashboard={() => setShowDashboard(true)}
