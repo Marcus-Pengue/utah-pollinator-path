@@ -662,3 +662,70 @@ if __name__ == '__main__':
     get_engine()
     print(f"\n  Utah Pollinator Path API running on http://localhost:{port}\n")
     app.run(host='0.0.0.0', port=port, debug=True)
+
+# =============================================================================
+# CACHED WILDLIFE DATA (105k+ observations)
+# =============================================================================
+
+CACHE_FILE = os.path.join(os.path.dirname(__file__), 'static', 'wildlife_cache.json')
+_wildlife_cache = None
+
+def load_wildlife_cache():
+    global _wildlife_cache
+    if _wildlife_cache is None and os.path.exists(CACHE_FILE):
+        print(f"Loading wildlife cache from {CACHE_FILE}...")
+        with open(CACHE_FILE, 'r') as f:
+            _wildlife_cache = json.load(f)
+        print(f"Loaded {_wildlife_cache.get('total_observations', 0):,} observations")
+    return _wildlife_cache
+
+@app.route('/api/wildlife/cached', methods=['GET'])
+def get_cached_wildlife():
+    """Return cached wildlife observations."""
+    cache = load_wildlife_cache()
+    if not cache:
+        return jsonify({"error": "Cache not found", "path": CACHE_FILE}), 404
+    
+    min_year = request.args.get('min_year', type=int)
+    max_year = request.args.get('max_year', type=int)
+    taxon = request.args.get('taxon')
+    
+    features = cache.get("features", [])
+    
+    if min_year or max_year or taxon:
+        filtered = []
+        for f in features:
+            props = f.get("properties", {})
+            y = props.get("year")
+            t = props.get("iconic_taxon")
+            
+            if min_year and (not y or y < min_year):
+                continue
+            if max_year and (not y or y > max_year):
+                continue
+            if taxon and t != taxon:
+                continue
+            filtered.append(f)
+        features = filtered
+    
+    return jsonify({
+        "type": "FeatureCollection",
+        "total": len(features),
+        "year_distribution": cache.get("year_distribution", {}),
+        "taxon_distribution": cache.get("taxon_distribution", {}),
+        "features": features
+    })
+
+@app.route('/api/wildlife/cached/stats', methods=['GET'])
+def get_wildlife_cache_stats():
+    """Return cache statistics without full data."""
+    cache = load_wildlife_cache()
+    if not cache:
+        return jsonify({"error": "Cache not found"}), 404
+    
+    return jsonify({
+        "total_observations": cache.get("total_observations"),
+        "generated": cache.get("generated"),
+        "year_distribution": cache.get("year_distribution", {}),
+        "taxon_distribution": cache.get("taxon_distribution", {}),
+    })
