@@ -64,6 +64,20 @@ const SEASONS = [
 
 const GRID_SIZE = 0.012;
 
+
+// City bounding boxes for filtering [minLng, minLat, maxLng, maxLat]
+const CITY_BOUNDS: Record<string, [number, number, number, number]> = {
+  'Salt Lake City': [-112.1, 40.65, -111.75, 40.85],
+  'Murray': [-111.95, 40.62, -111.85, 40.72],
+  'Sandy': [-111.92, 40.52, -111.80, 40.62],
+  'West Valley City': [-112.1, 40.65, -111.95, 40.75],
+  'Provo': [-111.75, 40.18, -111.60, 40.30],
+  'Ogden': [-112.05, 41.18, -111.90, 41.28],
+  'Draper': [-111.92, 40.48, -111.80, 40.56],
+  'Taylorsville': [-112.0, 40.62, -111.90, 40.72],
+};
+
+
 function createGrid(features: Feature[]): GridCell[] {
   const cellMap: Record<string, GridCell> = {};
   features.forEach(f => {
@@ -175,12 +189,15 @@ const DiscoveryMap: React.FC = () => {
   ];
 
   const [userGardenData, setUserGardenData] = useState<{
+    lat?: number;
+    lng?: number;
     plants: string[];
     features: string[];
     size: string;
     tier: string;
     isPesticideFree: boolean;
   } | null>(null);
+  const [userObservations, setUserObservations] = useState<Feature[]>([]);
 
   // Check for referral code in URL
   
@@ -233,6 +250,45 @@ const DiscoveryMap: React.FC = () => {
       map.flyTo({ center: [lng, lat], zoom, duration: 1500 });
     }
   }, [selectedCity]);
+
+  // Reset layer visibility when switching modes
+  useEffect(() => {
+    const modeDefaults: Record<AppMode, typeof showLayers> = {
+      government: { observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false },
+      homeowner: { observations: false, gardens: true, opportunityZones: true, heatmap: false, grid: false },
+      academic: { observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false },
+    };
+    setShowLayers(modeDefaults[appMode]);
+    // Also reset city filter when switching modes
+    setSelectedCity('');
+  }, [appMode]);
+
+  // Load observations near user's garden for homeowner mode
+  useEffect(() => {
+    if (appMode !== 'homeowner' || !userGardenData) {
+      setUserObservations([]);
+      return;
+    }
+    
+    // Filter wildlifeFeatures to show only those near user's garden (500m radius)
+    const gardenLat = userGardenData.lat || 0;
+    const gardenLng = userGardenData.lng || 0;
+    
+    if (gardenLat && gardenLng && wildlifeFeatures.length > 0) {
+      const nearbyObs = wildlifeFeatures.filter(f => {
+        const [lng, lat] = f.geometry.coordinates;
+        // Approximate 500m in degrees (~0.0045 for lat, ~0.005 for lng at this latitude)
+        const latDiff = Math.abs(lat - gardenLat);
+        const lngDiff = Math.abs(lng - gardenLng);
+        return latDiff < 0.0045 && lngDiff < 0.006;
+      });
+      setUserObservations(nearbyObs);
+    }
+  }, [appMode, userGardenData, wildlifeFeatures]);
+
+
+
+
 
 
   
@@ -365,6 +421,12 @@ const DiscoveryMap: React.FC = () => {
       const taxon = props.iconic_taxon;
       const filter = wildlifeFilters.find(w => w.id === taxon);
       if (filter && !filter.visible) return false;
+      // City bounds filter
+      if (selectedCity && CITY_BOUNDS[selectedCity]) {
+        const [minLng, minLat, maxLng, maxLat] = CITY_BOUNDS[selectedCity];
+        const [lng, lat] = f.geometry.coordinates;
+        if (lng < minLng || lng > maxLng || lat < minLat || lat > maxLat) return false;
+      }
       return true;
     });
   };
@@ -387,6 +449,12 @@ const DiscoveryMap: React.FC = () => {
       const taxon = props.iconic_taxon;
       const filter = wildlifeFilters.find(w => w.id === taxon);
       if (filter && !filter.visible) return false;
+      // City bounds filter
+      if (selectedCity && CITY_BOUNDS[selectedCity]) {
+        const [minLng, minLat, maxLng, maxLat] = CITY_BOUNDS[selectedCity];
+        const [lng, lat] = f.geometry.coordinates;
+        if (lng < minLng || lng > maxLng || lat < minLat || lat > maxLat) return false;
+      }
       return true;
     });
   };
@@ -394,12 +462,12 @@ const DiscoveryMap: React.FC = () => {
   const leftFeatures = useMemo(() => {
     if (compareMode) return filterByYear(wildlifeFeatures, leftYearRange);
     return filterAll(wildlifeFeatures);
-  }, [wildlifeFeatures, leftYearRange, compareMode, selectedYear, selectedSeason, wildlifeFilters]);
+  }, [wildlifeFeatures, leftYearRange, compareMode, selectedYear, selectedSeason, wildlifeFilters, selectedCity]);
   
   const rightFeatures = useMemo(() => {
     if (compareMode) return filterByYear(wildlifeFeatures, rightYearRange);
     return [];
-  }, [wildlifeFeatures, rightYearRange, compareMode, selectedSeason, wildlifeFilters]);
+  }, [wildlifeFeatures, rightYearRange, compareMode, selectedSeason, wildlifeFilters, selectedCity]);
 
   const visibleFeatures = compareMode ? leftFeatures : leftFeatures;
   const gridCells = useMemo(() => createGrid(visibleFeatures), [visibleFeatures]);
@@ -504,7 +572,55 @@ const DiscoveryMap: React.FC = () => {
             </Marker>
           ))}
 
-          {/* Garden markers */}
+          
+            {/* User's nearby observations - Homeowner mode */}
+            {appMode === 'homeowner' && userGardenData && userObservations.length > 0 && (
+              <Source
+                id="user-observations"
+                type="geojson"
+                data={{
+                  type: 'FeatureCollection',
+                  features: userObservations
+                }}
+              >
+                <Layer
+                  id="user-observations-layer"
+                  type="circle"
+                  paint={{
+                    'circle-radius': 6,
+                    'circle-color': '#f59e0b',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-opacity': 0.9
+                  }}
+                />
+              </Source>
+            )}
+
+            {/* User's garden marker - Homeowner mode */}
+            {appMode === 'homeowner' && userGardenData && userGardenData.lat && userGardenData.lng && (
+              <Marker
+                latitude={userGardenData.lat}
+                longitude={userGardenData.lng}
+              >
+                <div style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  backgroundColor: '#22c55e',
+                  border: '3px solid white',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20
+                }}>
+                  🏡
+                </div>
+              </Marker>
+            )}
+
+            {/* Garden markers */}
           {showGardens && !compareMode && gardens.map((g, i) => (
             <Marker 
               key={g.properties.id || i} 
@@ -887,6 +1003,7 @@ const DiscoveryMap: React.FC = () => {
           yearRange={[2000, 2025]}
           onYearRangeChange={() => {}}
           observationCount={filteredObservationCount}
+          userObservationCount={userObservations.length}
           gardenCount={gardens?.length || 0}
           onOpenLeaderboard={() => setShowLeaderboard(true)}
           onOpenDashboard={() => setShowDashboard(true)}

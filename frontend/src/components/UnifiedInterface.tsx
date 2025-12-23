@@ -33,6 +33,7 @@ interface UnifiedInterfaceProps {
   onYearRangeChange: (range: [number, number]) => void;
   // Stats
   observationCount: number;
+  userObservationCount?: number;
   gardenCount: number;
   // Actions
   onOpenLeaderboard: () => void;
@@ -137,9 +138,13 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
       }}>
         <div style={{ flex: 1, textAlign: 'center' }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: features.primaryColor }}>
-            {props.observationCount.toLocaleString()}
+            {props.mode === 'homeowner' && props.userObservationCount !== undefined 
+              ? props.userObservationCount.toLocaleString()
+              : props.observationCount.toLocaleString()}
           </div>
-          <div style={{ fontSize: 9, color: '#666' }}>Observations</div>
+          <div style={{ fontSize: 9, color: '#666' }}>
+            {props.mode === 'homeowner' ? 'My Observations' : 'Observations'}
+          </div>
         </div>
         <div style={{ width: 1, backgroundColor: '#e5e7eb' }} />
         <div style={{ flex: 1, textAlign: 'center' }}>
