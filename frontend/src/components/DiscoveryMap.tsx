@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl';
-import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare } from 'lucide-react';
+import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare, Plus, Flower2 } from 'lucide-react';
 import { api } from '../api/client';
+import GardenRegistration from './GardenRegistration';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
@@ -18,6 +19,19 @@ interface GridCell {
   count: number;
   percentile: number;
   features: Feature[];
+}
+
+interface Garden {
+  type: string;
+  geometry: { type: string; coordinates: number[] };
+  properties: {
+    id: string;
+    name: string;
+    size: string;
+    plants: string[];
+    features: string[];
+    created: string;
+  };
 }
 
 const WILDLIFE_FILTERS = [
@@ -96,11 +110,18 @@ const DiscoveryMap: React.FC = () => {
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Garden registration state
+  const [gardens, setGardens] = useState<Garden[]>([]);
+  const [showGardens, setShowGardens] = useState(true);
+  const [registerMode, setRegisterMode] = useState(false);
+  const [pendingLocation, setPendingLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [selectedGarden, setSelectedGarden] = useState<Garden | null>(null);
+  const [gardenSuccess, setGardenSuccess] = useState(false);
+
   const availableYears = useMemo(() => Object.keys(yearStats).map(Number).sort((a, b) => a - b), [yearStats]);
   const minYear = availableYears[0] || 1871;
   const maxYear = availableYears[availableYears.length - 1] || 2025;
 
-  // Preset configurations
   const presets = [
     { id: '100years', name: '100 Years', left: [1920, 1930] as [number, number], right: [2020, 2025] as [number, number] },
     { id: '50years', name: '50 Years', left: [1970, 1980] as [number, number], right: [2020, 2025] as [number, number] },
@@ -110,11 +131,23 @@ const DiscoveryMap: React.FC = () => {
   ];
 
   const applyPreset = (preset: typeof presets[0]) => {
-    console.log('Applying preset:', preset.name, preset.left, preset.right);
     setLeftYearRange(preset.left);
     setRightYearRange(preset.right);
     setActivePreset(preset.id);
   };
+
+  // Load gardens
+  useEffect(() => {
+    const loadGardens = async () => {
+      try {
+        const res = await api.get('/api/gardens');
+        setGardens(res.data.features || []);
+      } catch (err) {
+        console.log('Gardens not loaded:', err);
+      }
+    };
+    loadGardens();
+  }, []);
 
   useEffect(() => {
     if (!playing || compareMode || availableYears.length === 0) return;
@@ -154,29 +187,45 @@ const DiscoveryMap: React.FC = () => {
     setSliderPosition(Math.max(5, Math.min(95, (x / rect.width) * 100)));
   }, [isDragging]);
 
+  const handleMapClick = (e: any) => {
+    if (registerMode && e.lngLat) {
+      setPendingLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+    }
+  };
+
+  const handleGardenSubmit = async (data: any) => {
+    try {
+      const res = await api.post('/api/gardens', data);
+      if (res.data.success) {
+        // Refresh gardens
+        const gardensRes = await api.get('/api/gardens');
+        setGardens(gardensRes.data.features || []);
+        setPendingLocation(null);
+        setRegisterMode(false);
+        setGardenSuccess(true);
+        setTimeout(() => setGardenSuccess(false), 3000);
+      }
+    } catch (err) {
+      console.error('Failed to register garden:', err);
+      alert('Failed to register garden. Please try again.');
+    }
+  };
+
   const toggleWildlife = (id: string) => setWildlifeFilters(p => p.map(l => l.id === id ? {...l, visible: !l.visible} : l));
 
-  // Filter features - now a regular function since deps are passed as args
   const filterByYear = (features: Feature[], yearRange: [number, number]) => {
     return features.filter(f => {
       const props = f.properties || {};
       const year = props.year;
       const month = props.month;
-      
-      // Year filter
       if (year && (year < yearRange[0] || year > yearRange[1])) return false;
-      
-      // Season filter
       if (selectedSeason) {
         const season = SEASONS.find(s => s.id === selectedSeason);
         if (season && month && !season.months.includes(month)) return false;
       }
-      
-      // Taxon filter
       const taxon = props.iconic_taxon;
       const filter = wildlifeFilters.find(w => w.id === taxon);
       if (filter && !filter.visible) return false;
-      
       return true;
     });
   };
@@ -186,34 +235,25 @@ const DiscoveryMap: React.FC = () => {
       const props = f.properties || {};
       const year = props.year;
       const month = props.month;
-      
       if (selectedYear && year !== selectedYear) return false;
-      
       if (selectedSeason) {
         const season = SEASONS.find(s => s.id === selectedSeason);
         if (season && month && !season.months.includes(month)) return false;
       }
-      
       const taxon = props.iconic_taxon;
       const filter = wildlifeFilters.find(w => w.id === taxon);
       if (filter && !filter.visible) return false;
-      
       return true;
     });
   };
 
-  // Compute features for each side
   const leftFeatures = useMemo(() => {
-    if (compareMode) {
-      return filterByYear(wildlifeFeatures, leftYearRange);
-    }
+    if (compareMode) return filterByYear(wildlifeFeatures, leftYearRange);
     return filterAll(wildlifeFeatures);
   }, [wildlifeFeatures, leftYearRange, compareMode, selectedYear, selectedSeason, wildlifeFilters]);
   
   const rightFeatures = useMemo(() => {
-    if (compareMode) {
-      return filterByYear(wildlifeFeatures, rightYearRange);
-    }
+    if (compareMode) return filterByYear(wildlifeFeatures, rightYearRange);
     return [];
   }, [wildlifeFeatures, rightYearRange, compareMode, selectedSeason, wildlifeFilters]);
 
@@ -260,7 +300,14 @@ const DiscoveryMap: React.FC = () => {
       
       {/* Left map */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', clipPath: compareMode ? `inset(0 ${100 - sliderPosition}% 0 0)` : 'none' }}>
-        <MapGL {...viewState} onMove={e => setViewState(e.viewState)} mapStyle="mapbox://styles/mapbox/light-v11" mapboxAccessToken={MAPBOX_TOKEN} style={{ width: '100%', height: '100%' }}>
+        <MapGL 
+          {...viewState} 
+          onMove={e => setViewState(e.viewState)} 
+          onClick={handleMapClick}
+          mapStyle="mapbox://styles/mapbox/light-v11" 
+          mapboxAccessToken={MAPBOX_TOKEN} 
+          style={{ width: '100%', height: '100%', cursor: registerMode ? 'crosshair' : 'grab' }}
+        >
           {!compareMode && <NavigationControl position="bottom-right" />}
           
           <Source id="heat-left" type="geojson" data={leftHeatmap}>
@@ -278,6 +325,53 @@ const DiscoveryMap: React.FC = () => {
             </Marker>
           ))}
 
+          {/* Garden markers */}
+          {showGardens && !compareMode && gardens.map((g, i) => (
+            <Marker 
+              key={g.properties.id || i} 
+              latitude={g.geometry.coordinates[1]} 
+              longitude={g.geometry.coordinates[0]}
+              onClick={e => { e.originalEvent.stopPropagation(); setSelectedGarden(g); }}
+            >
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                backgroundColor: '#22c55e',
+                border: '3px solid white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: 16
+              }}>
+                🌻
+              </div>
+            </Marker>
+          ))}
+
+          {/* Pending location marker */}
+          {pendingLocation && (
+            <Marker latitude={pendingLocation.lat} longitude={pendingLocation.lng}>
+              <div style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                backgroundColor: '#f59e0b',
+                border: '3px solid white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                animation: 'pulse 1s infinite',
+                fontSize: 20
+              }}>
+                📍
+              </div>
+            </Marker>
+          )}
+
           {selectedCell && (
             <Popup latitude={selectedCell.lat} longitude={selectedCell.lng} onClose={() => setSelectedCell(null)} anchor="bottom" maxWidth="280px">
               <div style={{ padding: 4 }}>
@@ -293,6 +387,39 @@ const DiscoveryMap: React.FC = () => {
               </div>
             </Popup>
           )}
+
+          {/* Garden popup */}
+          {selectedGarden && (
+            <Popup 
+              latitude={selectedGarden.geometry.coordinates[1]} 
+              longitude={selectedGarden.geometry.coordinates[0]} 
+              onClose={() => setSelectedGarden(null)} 
+              anchor="bottom" 
+              maxWidth="280px"
+            >
+              <div style={{ padding: 8 }}>
+                <h3 style={{ margin: '0 0 4px', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Flower2 size={16} color="#22c55e" />
+                  {selectedGarden.properties.name}
+                </h3>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 8 }}>
+                  {selectedGarden.properties.size} garden
+                </div>
+                {selectedGarden.properties.plants?.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, color: '#888' }}>Plants:</div>
+                    <div style={{ fontSize: 11 }}>{selectedGarden.properties.plants.join(', ')}</div>
+                  </div>
+                )}
+                {selectedGarden.properties.features?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: '#888' }}>Features:</div>
+                    <div style={{ fontSize: 11 }}>{selectedGarden.properties.features.join(', ')}</div>
+                  </div>
+                )}
+              </div>
+            </Popup>
+          )}
         </MapGL>
       </div>
 
@@ -301,7 +428,6 @@ const DiscoveryMap: React.FC = () => {
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', clipPath: `inset(0 0 0 ${sliderPosition}%)` }}>
           <MapGL {...viewState} onMove={e => setViewState(e.viewState)} mapStyle="mapbox://styles/mapbox/light-v11" mapboxAccessToken={MAPBOX_TOKEN} style={{ width: '100%', height: '100%' }}>
             <NavigationControl position="bottom-right" />
-            
             <Source id="heat-right" type="geojson" data={rightHeatmap}>
               <Layer id="heatmap-right" type="heatmap" paint={{
                 ...heatmapPaint,
@@ -322,58 +448,108 @@ const DiscoveryMap: React.FC = () => {
         </div>
       )}
 
-      {/* Year labels in compare mode - positioned in center of each half */}
+      {/* Compare labels */}
       {compareMode && (
         <>
-          <div style={{ 
-            position: 'absolute', 
-            top: 100, 
-            left: `${sliderPosition / 2}%`,
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(59,130,246,0.95)', 
-            color: 'white', 
-            padding: '12px 20px', 
-            borderRadius: 12, 
-            fontWeight: 700, 
-            fontSize: 18, 
-            zIndex: 150, 
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            textAlign: 'center',
-            minWidth: 140
-          }}>
+          <div style={{ position: 'absolute', top: 100, left: `${sliderPosition / 2}%`, transform: 'translateX(-50%)', backgroundColor: 'rgba(59,130,246,0.95)', color: 'white', padding: '12px 20px', borderRadius: 12, fontWeight: 700, fontSize: 18, zIndex: 150, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', textAlign: 'center', minWidth: 140 }}>
             {leftYearRange[0]} - {leftYearRange[1]}
             <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 400 }}>{leftFeatures.length.toLocaleString()} obs</div>
           </div>
-          <div style={{ 
-            position: 'absolute', 
-            top: 100, 
-            left: `${sliderPosition + (100 - sliderPosition) / 2}%`,
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(234,88,12,0.95)', 
-            color: 'white', 
-            padding: '12px 20px', 
-            borderRadius: 12, 
-            fontWeight: 700, 
-            fontSize: 18, 
-            zIndex: 150, 
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            textAlign: 'center',
-            minWidth: 140
-          }}>
+          <div style={{ position: 'absolute', top: 100, left: `${sliderPosition + (100 - sliderPosition) / 2}%`, transform: 'translateX(-50%)', backgroundColor: 'rgba(234,88,12,0.95)', color: 'white', padding: '12px 20px', borderRadius: 12, fontWeight: 700, fontSize: 18, zIndex: 150, boxShadow: '0 4px 12px rgba(0,0,0,0.3)', textAlign: 'center', minWidth: 140 }}>
             {rightYearRange[0]} - {rightYearRange[1]}
             <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 400 }}>{rightFeatures.length.toLocaleString()} obs</div>
           </div>
         </>
       )}
 
+      {/* Register mode banner */}
+      {registerMode && (
+        <div style={{
+          position: 'absolute',
+          top: 80,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#f59e0b',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: 12,
+          fontWeight: 600,
+          fontSize: 14,
+          zIndex: 300,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          📍 Click on the map to place your garden
+          <button 
+            onClick={() => setRegisterMode(false)}
+            style={{ 
+              padding: '4px 12px', 
+              borderRadius: 6, 
+              border: 'none', 
+              backgroundColor: 'rgba(255,255,255,0.2)', 
+              color: 'white', 
+              cursor: 'pointer',
+              fontSize: 12
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Success message */}
+      {gardenSuccess && (
+        <div style={{
+          position: 'absolute',
+          top: 80,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#22c55e',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: 12,
+          fontWeight: 600,
+          fontSize: 14,
+          zIndex: 300,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8
+        }}>
+          🌻 Garden registered successfully! Thank you for supporting pollinators.
+        </div>
+      )}
+
       {/* Layers Panel */}
       <div style={{ position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', width: 220, overflow: 'hidden', zIndex: 200 }}>
         <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}><Layers size={16} style={{ marginRight: 6 }} />Species</span>
+          <span style={{ fontWeight: 600, fontSize: 13 }}><Layers size={16} style={{ marginRight: 6 }} />Layers</span>
           {layerPanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
         {layerPanelOpen && (
-          <div style={{ padding: 10, maxHeight: 280, overflowY: 'auto' }}>
+          <div style={{ padding: 10, maxHeight: 320, overflowY: 'auto' }}>
+            {/* Gardens toggle */}
+            <div 
+              onClick={() => setShowGardens(!showGardens)} 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                padding: '6px 8px', 
+                borderRadius: 6, 
+                cursor: 'pointer', 
+                backgroundColor: showGardens ? '#f0fdf4' : 'transparent',
+                border: '1px solid #22c55e',
+                marginBottom: 8
+              }}
+            >
+              <span style={{ marginRight: 6, fontSize: 14 }}>🌻</span>
+              <span style={{ flex: 1, fontSize: 11, fontWeight: 500 }}>Registered Gardens</span>
+              <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>{gardens.length}</span>
+              {showGardens ? <Eye size={12} color="#22c55e" style={{ marginLeft: 4 }} /> : <EyeOff size={12} color="#ccc" style={{ marginLeft: 4 }} />}
+            </div>
+
             {!compareMode && (
               <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
                 <button onClick={() => setViewMode('grid')} style={{ flex: 1, padding: 4, borderRadius: 4, border: 'none', backgroundColor: viewMode === 'grid' ? '#22c55e' : '#eee', color: viewMode === 'grid' ? 'white' : '#666', cursor: 'pointer', fontSize: 10 }}><Grid3X3 size={10} /> Grid</button>
@@ -381,6 +557,7 @@ const DiscoveryMap: React.FC = () => {
               </div>
             )}
             
+            <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>WILDLIFE</div>
             {wildlifeFilters.map(w => (
               <div key={w.id} onClick={() => toggleWildlife(w.id)} style={{ display: 'flex', alignItems: 'center', padding: '3px 6px', borderRadius: 4, cursor: 'pointer', backgroundColor: w.visible ? `${w.color}15` : 'transparent', marginBottom: 2 }}>
                 <span style={{ marginRight: 5, fontSize: 11 }}>{w.icon}</span>
@@ -391,7 +568,7 @@ const DiscoveryMap: React.FC = () => {
             ))}
             
             <div style={{ marginTop: 8, padding: 6, backgroundColor: '#f5f5f5', borderRadius: 4, fontSize: 10 }}>
-              {loading ? <span style={{ color: '#888' }}>{progress}</span> : <span>📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> visible</span>}
+              {loading ? <span style={{ color: '#888' }}>{progress}</span> : <span>📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> observations</span>}
             </div>
           </div>
         )}
@@ -422,22 +599,7 @@ const DiscoveryMap: React.FC = () => {
                   <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>PRESETS</div>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {presets.map(p => (
-                      <button 
-                        key={p.id} 
-                        onClick={() => applyPreset(p)} 
-                        style={{ 
-                          padding: '5px 10px', 
-                          borderRadius: 4, 
-                          border: 'none', 
-                          backgroundColor: activePreset === p.id ? '#2563eb' : '#eee', 
-                          color: activePreset === p.id ? 'white' : '#666', 
-                          cursor: 'pointer', 
-                          fontSize: 10,
-                          fontWeight: activePreset === p.id ? 600 : 400
-                        }}
-                      >
-                        {p.name}
-                      </button>
+                      <button key={p.id} onClick={() => applyPreset(p)} style={{ padding: '5px 10px', borderRadius: 4, border: 'none', backgroundColor: activePreset === p.id ? '#2563eb' : '#eee', color: activePreset === p.id ? 'white' : '#666', cursor: 'pointer', fontSize: 10, fontWeight: activePreset === p.id ? 600 : 400 }}>{p.name}</button>
                     ))}
                   </div>
                 </div>
@@ -516,6 +678,34 @@ const DiscoveryMap: React.FC = () => {
         )}
       </div>
 
+      {/* Register Garden Button */}
+      {!compareMode && !registerMode && (
+        <button
+          onClick={() => setRegisterMode(true)}
+          style={{
+            position: 'absolute',
+            bottom: 80,
+            right: 20,
+            backgroundColor: '#22c55e',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: 12,
+            border: 'none',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(34,197,94,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            zIndex: 200
+          }}
+        >
+          <Plus size={18} />
+          Register Garden
+        </button>
+      )}
+
       {/* Year overlay */}
       {!compareMode && selectedYear && (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none', zIndex: 50 }}>
@@ -529,10 +719,20 @@ const DiscoveryMap: React.FC = () => {
       {/* Bottom bar */}
       <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', backgroundColor: 'white', padding: '8px 20px', borderRadius: 12, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: 16, zIndex: 200 }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>🐝 Utah Pollinator Path</span>
-        <span style={{ fontSize: 11, color: '#666' }}>📊 {wildlifeFeatures.length.toLocaleString()} total</span>
-        <span style={{ fontSize: 11, color: '#666' }}>📅 1871-2025</span>
+        <span style={{ fontSize: 11, color: '#666' }}>📊 {wildlifeFeatures.length.toLocaleString()} obs</span>
+        <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 500 }}>🌻 {gardens.length} gardens</span>
         {compareMode && <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 500 }}>🔀 Compare</span>}
       </div>
+
+      {/* Garden Registration Modal */}
+      {pendingLocation && (
+        <GardenRegistration
+          lat={pendingLocation.lat}
+          lng={pendingLocation.lng}
+          onSubmit={handleGardenSubmit}
+          onCancel={() => { setPendingLocation(null); setRegisterMode(false); }}
+        />
+      )}
     </div>
   );
 };
