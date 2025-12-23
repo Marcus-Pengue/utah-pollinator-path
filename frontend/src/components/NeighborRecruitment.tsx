@@ -313,7 +313,7 @@ Let's build a pollinator corridor on our street! 🌻🐝
           </div>
 
           {/* Native Share (mobile) */}
-          {typeof navigator !== 'undefined' && navigator.share && (
+          {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
             <button
               onClick={shareNative}
               style={{

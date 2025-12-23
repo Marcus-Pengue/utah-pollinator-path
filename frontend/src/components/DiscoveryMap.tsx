@@ -3,8 +3,16 @@ import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-ma
 import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Calendar, GitCompare, Plus, Flower2, Download } from 'lucide-react';
 import { api } from '../api/client';
 import GardenRegistration from './GardenRegistration';
+
+import ObservationCapture, { CapturedFrame, ObservationMetadata } from './ObservationCapture';
+import INaturalistUpload from './iNaturalistUpload';
+
+import UserDashboard from './UserDashboard';
+import Leaderboard from './Leaderboard';
+import UnifiedInterface from './UnifiedInterface';
+import { AppMode } from './ModeSelector';
 import SpeciesSearch from './SpeciesSearch';
-import UnifiedControlPanel from './UnifiedControlPanel';
+
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
@@ -122,8 +130,55 @@ const DiscoveryMap: React.FC = () => {
   const [minObservations, setMinObservations] = useState(0);
   const [registerMode, setRegisterMode] = useState(false);
   const [referralCode, setReferralCode] = useState('');
+  const [showObservationCapture, setShowObservationCapture] = useState(false);
+  const [capturedFrames, setCapturedFrames] = useState<CapturedFrame[]>([]);
+  const [observationMetadata, setObservationMetadata] = useState<ObservationMetadata | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [appMode, setAppMode] = useState<AppMode>('homeowner');
+  const [selectedTaxa, setSelectedTaxa] = useState<string[]>(['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']);
+  const [showLayers, setShowLayers] = useState({ observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false });
+  const [controlsVisible, setControlsVisible] = useState(true);
+  // Sample leaderboard data (will be replaced with real API data)
+  const sampleGardens = [
+    { id: 'g1', anonymousId: 'A3F2K1', city: 'Salt Lake City', score: 245, verifiedScore: 367, tier: 'Pollinator Champion', plantCount: 12, nativePlantCount: 9, fallBloomerCount: 4, observationCount: 28, referralCount: 5, verificationLevel: 'professional' as const, registeredAt: '2025-10-15' },
+    { id: 'g2', anonymousId: 'B7H9M2', city: 'Salt Lake City', score: 198, verifiedScore: 247, tier: 'Habitat Hero', plantCount: 10, nativePlantCount: 7, fallBloomerCount: 3, observationCount: 15, referralCount: 2, verificationLevel: 'community' as const, registeredAt: '2025-11-02' },
+    { id: 'g3', anonymousId: 'C1D4N8', city: 'Murray', score: 187, verifiedScore: 187, tier: 'Habitat Hero', plantCount: 9, nativePlantCount: 6, fallBloomerCount: 2, observationCount: 22, referralCount: 3, verificationLevel: 'unverified' as const, registeredAt: '2025-11-10' },
+    { id: 'g4', anonymousId: 'D9E2P5', city: 'Sandy', score: 156, verifiedScore: 195, tier: 'Bee Friendly', plantCount: 8, nativePlantCount: 5, fallBloomerCount: 3, observationCount: 11, referralCount: 1, verificationLevel: 'community' as const, registeredAt: '2025-11-20' },
+    { id: 'g5', anonymousId: 'E4F7Q1', city: 'West Valley City', score: 142, verifiedScore: 142, tier: 'Bee Friendly', plantCount: 7, nativePlantCount: 4, fallBloomerCount: 2, observationCount: 8, referralCount: 0, verificationLevel: 'unverified' as const, registeredAt: '2025-11-25' },
+    { id: 'g6', anonymousId: 'F2G8R3', city: 'Provo', score: 134, verifiedScore: 134, tier: 'Bee Friendly', plantCount: 6, nativePlantCount: 5, fallBloomerCount: 2, observationCount: 14, referralCount: 2, verificationLevel: 'unverified' as const, registeredAt: '2025-12-01' },
+    { id: 'g7', anonymousId: 'G5H1S9', city: 'Salt Lake City', score: 128, verifiedScore: 160, tier: 'Growing', plantCount: 5, nativePlantCount: 3, fallBloomerCount: 1, observationCount: 6, referralCount: 1, verificationLevel: 'community' as const, registeredAt: '2025-12-05' },
+    { id: 'g8', anonymousId: 'H8I3T6', city: 'Ogden', score: 115, verifiedScore: 115, tier: 'Growing', plantCount: 5, nativePlantCount: 3, fallBloomerCount: 1, observationCount: 9, referralCount: 0, verificationLevel: 'unverified' as const, registeredAt: '2025-12-08' },
+    { id: 'g9', anonymousId: 'I1J6U2', city: 'Murray', score: 98, verifiedScore: 98, tier: 'Growing', plantCount: 4, nativePlantCount: 2, fallBloomerCount: 1, observationCount: 4, referralCount: 0, verificationLevel: 'unverified' as const, registeredAt: '2025-12-12' },
+    { id: 'g10', anonymousId: 'J4K9V7', city: 'Draper', score: 87, verifiedScore: 87, tier: 'Seedling', plantCount: 3, nativePlantCount: 2, fallBloomerCount: 0, observationCount: 2, referralCount: 0, verificationLevel: 'unverified' as const, registeredAt: '2025-12-15' },
+    { id: 'g11', anonymousId: 'K7L2W4', city: 'Salt Lake City', score: 76, verifiedScore: 76, tier: 'Seedling', plantCount: 3, nativePlantCount: 1, fallBloomerCount: 0, observationCount: 3, referralCount: 1, verificationLevel: 'unverified' as const, registeredAt: '2025-12-18' },
+    { id: 'g12', anonymousId: 'L9M5X1', city: 'Taylorsville', score: 65, verifiedScore: 65, tier: 'Seedling', plantCount: 2, nativePlantCount: 1, fallBloomerCount: 0, observationCount: 1, referralCount: 0, verificationLevel: 'unverified' as const, registeredAt: '2025-12-20' },
+  ];
+
+  const [userGardenData, setUserGardenData] = useState<{
+    plants: string[];
+    features: string[];
+    size: string;
+    tier: string;
+    isPesticideFree: boolean;
+  } | null>(null);
 
   // Check for referral code in URL
+  
+  // Keyboard shortcut to hide controls
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'h' || e.key === 'H') {
+        if (document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+          setControlsVisible(prev => !prev);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
@@ -689,6 +744,141 @@ const DiscoveryMap: React.FC = () => {
         {compareMode && <span style={{ fontSize: 11, color: '#2563eb', fontWeight: 500 }}>🔀 Compare</span>}
       </div>
 
+      {/* Quick Action Buttons (Export, Share) */}
+      
+
+      
+      {/* Leaderboard Button */}
+      <button
+        onClick={() => setShowLeaderboard(true)}
+        style={{
+          position: 'fixed',
+          top: 20,
+          left: 20,
+          padding: '10px 16px',
+          borderRadius: 25,
+          border: 'none',
+          backgroundColor: '#f59e0b',
+          color: 'white',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+          zIndex: 100,
+          fontWeight: 600,
+          fontSize: 14
+        }}
+      >
+        🏆 Leaderboard
+      </button>
+
+      {/* Leaderboard Modal */}
+      <Leaderboard
+        isOpen={showLeaderboard}
+        onClose={() => setShowLeaderboard(false)}
+        userGardenId={userGardenData ? 'user_garden' : undefined}
+        gardens={sampleGardens}
+      />
+
+      {/* User Dashboard */}
+      <UserDashboard
+        isOpen={showDashboard}
+        onClose={() => setShowDashboard(false)}
+        gardenData={userGardenData ? {
+          id: 'user_garden',
+          name: 'My Garden',
+          lat: 0,
+          lng: 0,
+          size: userGardenData.size,
+          plants: userGardenData.plants,
+          features: userGardenData.features,
+          score: 100,
+          tier: userGardenData.tier,
+          registeredAt: new Date().toISOString(),
+          referralCode: 'ABC123',
+          referralCount: 0,
+          verification: { level: 'unverified' }
+        } : null}
+        observations={[]}
+        onEditGarden={() => { setShowDashboard(false); setRegisterMode(true); }}
+        onStartCapture={() => { setShowDashboard(false); setShowObservationCapture(true); }}
+      />
+
+      
+      {/* Unified Interface */}
+      {controlsVisible && (
+        <UnifiedInterface
+          mode={appMode}
+          onModeChange={setAppMode}
+          showOpportunityZones={showLayers.opportunityZones}
+          onToggleOpportunityZones={(show) => setShowLayers(prev => ({ ...prev, opportunityZones: show }))}
+          showGardens={showLayers.gardens}
+          onToggleGardens={(show) => setShowLayers(prev => ({ ...prev, gardens: show }))}
+          showObservations={showLayers.observations}
+          onToggleObservations={(show) => setShowLayers(prev => ({ ...prev, observations: show }))}
+          showHeatmap={showLayers.heatmap}
+          onToggleHeatmap={(show) => setShowLayers(prev => ({ ...prev, heatmap: show }))}
+          showGrid={showLayers.grid}
+          onToggleGrid={(show) => setShowLayers(prev => ({ ...prev, grid: show }))}
+          selectedTaxa={selectedTaxa || ['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']}
+          onTaxaChange={(taxa) => setSelectedTaxa(taxa)}
+          selectedCity={selectedCity || ''}
+          cities={['Salt Lake City', 'Murray', 'Sandy', 'West Valley City', 'Provo', 'Ogden', 'Draper', 'Taylorsville']}
+          onCityChange={setSelectedCity}
+          yearRange={[2000, 2025]}
+          onYearRangeChange={() => {}}
+          observationCount={wildlifeFeatures?.length || 0}
+          gardenCount={gardens?.length || 0}
+          onOpenLeaderboard={() => setShowLeaderboard(true)}
+          onOpenDashboard={() => setShowDashboard(true)}
+          onStartCapture={() => setShowObservationCapture(true)}
+          onRegisterGarden={() => setRegisterMode(true)}
+          onExportData={() => {}}
+          hasRegisteredGarden={!!userGardenData}
+        />
+      )}
+
+      {/* Leaderboard Modal */}
+      <Leaderboard
+        isOpen={showLeaderboard}
+        onClose={() => setShowLeaderboard(false)}
+        userGardenId={userGardenData ? 'user_garden' : undefined}
+        gardens={sampleGardens}
+      />
+
+      {/* Observation Capture Modal */}
+      {showObservationCapture && (
+        <ObservationCapture
+          onCapture={(frames, metadata) => {
+            setCapturedFrames(frames);
+            setObservationMetadata(metadata);
+            setShowObservationCapture(false);
+            setShowUploadModal(true);
+          }}
+          onCancel={() => setShowObservationCapture(false)}
+        />
+      )}
+
+      {/* iNaturalist Upload Modal */}
+      {showUploadModal && observationMetadata && (
+        <INaturalistUpload
+          frames={capturedFrames}
+          metadata={observationMetadata}
+          gardenData={userGardenData || undefined}
+          onComplete={(success) => {
+            setShowUploadModal(false);
+            setCapturedFrames([]);
+            setObservationMetadata(null);
+          }}
+          onCancel={() => {
+            setShowUploadModal(false);
+            setCapturedFrames([]);
+            setObservationMetadata(null);
+          }}
+        />
+      )}
+
       {/* Garden Registration Modal */}
       {pendingLocation && (
         <GardenRegistration
@@ -710,41 +900,7 @@ const DiscoveryMap: React.FC = () => {
       )}
 
       {/* Unified Control Panel */}
-      <UnifiedControlPanel
-        wildlifeFilters={wildlifeFilters}
-        gardens={gardens}
-        opportunityData={opportunityData}
-        wildlifeFeatures={wildlifeFeatures}
-        filteredFeatures={leftFeatures}
-        selectedYear={selectedYear}
-        selectedSeason={selectedSeason}
-        minYear={minYear}
-        maxYear={maxYear}
-        playing={playing}
-        playSpeed={playSpeed}
-        compareMode={compareMode}
-        leftYearRange={leftYearRange}
-        rightYearRange={rightYearRange}
-        selectedSpecies={selectedSpecies}
-        selectedCity={selectedCity}
-        showOpportunityZones={showOpportunityZones}
-        showGardens={showGardens}
-        viewMode={viewMode}
-        onToggleTaxon={toggleWildlife}
-        onSetYear={setSelectedYear}
-        onSetSeason={setSelectedSeason}
-        onSetPlaying={setPlaying}
-        onSetPlaySpeed={setPlaySpeed}
-        onSetCompareMode={setCompareMode}
-        onSetLeftYearRange={setLeftYearRange}
-        onSetRightYearRange={setRightYearRange}
-        onSetSpecies={setSelectedSpecies}
-        onSetCity={setSelectedCity}
-        onSetShowOpportunityZones={setShowOpportunityZones}
-        onSetShowGardens={setShowGardens}
-        onSetViewMode={setViewMode}
-        onClearAll={handleClearAllFilters}
-      />
+      
     </div>
   );
 };

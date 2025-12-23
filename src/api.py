@@ -940,6 +940,165 @@ def garden_stats():
 
 
 
+
+# ============================================
+# VERIFICATION SYSTEM
+# ============================================
+
+@app.route('/api/verification/schedule', methods=['POST'])
+def schedule_verification():
+    """Schedule a professional verification appointment."""
+    data = request.get_json()
+    garden_id = data.get('garden_id')
+    date = data.get('date')
+    time = data.get('time')
+    
+    # In production, this would:
+    # 1. Create a calendar event
+    # 2. Send confirmation email
+    # 3. Process payment
+    
+    # For now, save to a simple file
+    appointments_file = os.path.join(STATIC_DIR, 'appointments.json')
+    try:
+        with open(appointments_file, 'r') as f:
+            appointments = json.load(f)
+    except:
+        appointments = []
+    
+    appointment = {
+        'id': f"apt_{int(time.time())}",
+        'garden_id': garden_id,
+        'date': date,
+        'time': time,
+        'status': 'pending',
+        'created_at': datetime.now().isoformat(),
+        'price': 15.00
+    }
+    appointments.append(appointment)
+    
+    with open(appointments_file, 'w') as f:
+        json.dump(appointments, f, indent=2)
+    
+    return jsonify({
+        'success': True,
+        'appointment': appointment,
+        'message': f'Verification scheduled for {date} at {time}'
+    })
+
+@app.route('/api/verification/community/request', methods=['POST'])
+def request_community_verification():
+    """Request community verification from nearby gardeners."""
+    data = request.get_json()
+    garden_id = data.get('garden_id')
+    
+    gardens = load_gardens()
+    garden = next((g for g in gardens if g.get('properties', {}).get('id') == garden_id), None)
+    if not garden:
+        return jsonify({'error': 'Garden not found'}), 404
+    
+    coords = garden.get('geometry', {}).get('coordinates', [0, 0])
+    
+    # Find nearby gardens that could verify (within 8km / 5 miles)
+    nearby_verifiers = []
+    for g in gardens:
+        if g.get('properties', {}).get('id') == garden_id:
+            continue
+        g_coords = g.get('geometry', {}).get('coordinates', [0, 0])
+        lat_diff = (coords[1] - g_coords[1]) * 111000
+        lng_diff = (coords[0] - g_coords[0]) * 85000
+        distance = (lat_diff**2 + lng_diff**2) ** 0.5
+        
+        if distance <= 8000:  # 8km
+            nearby_verifiers.append({
+                'anonymous_id': generate_referral_code(g.get('properties', {}).get('id', '')),
+                'distance_km': round(distance / 1000, 1),
+                'tier': g.get('properties', {}).get('tier', 'Seedling')
+            })
+    
+    return jsonify({
+        'success': True,
+        'nearby_verifiers': len(nearby_verifiers),
+        'message': f'Verification request sent to {len(nearby_verifiers)} nearby gardeners'
+    })
+
+@app.route('/api/verification/submit', methods=['POST'])
+def submit_verification():
+    """Submit verification photos and confirm a garden."""
+    data = request.get_json()
+    garden_id = data.get('garden_id')
+    verifier_id = data.get('verifier_id')
+    verification_type = data.get('type', 'community')  # 'community' or 'professional'
+    photos = data.get('photos', [])
+    
+    gardens = load_gardens()
+    for g in gardens:
+        if g.get('properties', {}).get('id') == garden_id:
+            g['properties']['verification'] = {
+                'level': verification_type,
+                'verified_at': datetime.now().isoformat(),
+                'verified_by': verifier_id,
+                'photos': photos
+            }
+            # Apply score multiplier
+            current_score = g['properties'].get('score', 0)
+            multiplier = 1.5 if verification_type == 'professional' else 1.25
+            g['properties']['verified_score'] = int(current_score * multiplier)
+            break
+    
+    save_gardens(gardens)
+    
+    return jsonify({
+        'success': True,
+        'message': f'Garden verified as {verification_type}',
+        'multiplier': 1.5 if verification_type == 'professional' else 1.25
+    })
+
+@app.route('/api/gardens/<garden_id>/plants', methods=['POST'])
+def add_plant(garden_id):
+    """Add a new plant to a garden."""
+    data = request.get_json()
+    
+    gardens = load_gardens()
+    for g in gardens:
+        if g.get('properties', {}).get('id') == garden_id:
+            if 'plant_log' not in g['properties']:
+                g['properties']['plant_log'] = []
+            
+            plant_entry = {
+                'id': f"plant_{int(time.time())}_{len(g['properties']['plant_log'])}",
+                'species': data.get('species'),
+                'quantity': data.get('quantity', 1),
+                'planted_date': data.get('planted_date'),
+                'is_new_planting': True,
+                'verified': False,
+                'created_at': datetime.now().isoformat()
+            }
+            g['properties']['plant_log'].append(plant_entry)
+            
+            # Also add to plants list if not already there
+            if data.get('species') not in g['properties'].get('plants', []):
+                if 'plants' not in g['properties']:
+                    g['properties']['plants'] = []
+                g['properties']['plants'].append(data.get('species'))
+            
+            save_gardens(gardens)
+            return jsonify({'success': True, 'plant': plant_entry})
+    
+    return jsonify({'error': 'Garden not found'}), 404
+
+@app.route('/api/appointments', methods=['GET'])
+def get_appointments():
+    """Get all scheduled verification appointments (admin only)."""
+    appointments_file = os.path.join(STATIC_DIR, 'appointments.json')
+    try:
+        with open(appointments_file, 'r') as f:
+            appointments = json.load(f)
+    except:
+        appointments = []
+    return jsonify(appointments)
+
+
 # ============================================
 # REFERRAL SYSTEM
 # ============================================
