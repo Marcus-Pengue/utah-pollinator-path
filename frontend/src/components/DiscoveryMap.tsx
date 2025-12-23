@@ -4,6 +4,7 @@ import { Layers, Eye, EyeOff, ChevronDown, ChevronUp, Play, Pause, Grid3X3, Cale
 import { api } from '../api/client';
 import GardenRegistration from './GardenRegistration';
 import SpeciesSearch from './SpeciesSearch';
+import UnifiedControlPanel from './UnifiedControlPanel';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
@@ -114,6 +115,11 @@ const DiscoveryMap: React.FC = () => {
   // Garden registration state
   const [gardens, setGardens] = useState<Garden[]>([]);
   const [showGardens, setShowGardens] = useState(true);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [opportunityData, setOpportunityData] = useState<any>(null);
+  const [showOpportunityZones, setShowOpportunityZones] = useState(true);
+  const [minConnectivity, setMinConnectivity] = useState(0);
+  const [minObservations, setMinObservations] = useState(0);
   const [registerMode, setRegisterMode] = useState(false);
   const [pendingLocation, setPendingLocation] = useState<{lat: number, lng: number} | null>(null);
   const [selectedGarden, setSelectedGarden] = useState<Garden | null>(null);
@@ -273,6 +279,16 @@ const DiscoveryMap: React.FC = () => {
   const visibleFeatures = compareMode ? leftFeatures : leftFeatures;
   const gridCells = useMemo(() => createGrid(visibleFeatures), [visibleFeatures]);
   
+  // Available cities from opportunity data
+  const availableCities = useMemo(() => {
+    if (!opportunityData?.features) return [];
+    const cities = new Set<string>();
+    opportunityData.features.forEach((f: any) => {
+      if (f.properties?.nearest_location) cities.add(f.properties.nearest_location);
+    });
+    return Array.from(cities).sort();
+  }, [opportunityData]);
+
   const taxonStats = useMemo(() => {
     const s: Record<string, number> = {};
     visibleFeatures.forEach(f => { const t = f.properties?.iconic_taxon || 'Other'; s[t] = (s[t] || 0) + 1; });
@@ -306,6 +322,31 @@ const DiscoveryMap: React.FC = () => {
     'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 8, 0.3, 15, 1.5] as any,
     'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 15, 13, 25] as any,
     'heatmap-opacity': 0.8,
+  };
+
+  // Filter handlers for FilterPanel
+  const handleFilterChange = (key: string, value: any) => {
+    switch (key) {
+      case 'taxa':
+        setWildlifeFilters(prev => prev.map(f => ({ ...f, visible: value[f.id] ?? f.visible })));
+        break;
+      case 'selectedYear': setSelectedYear(value); break;
+      case 'selectedSeason': setSelectedSeason(value); break;
+      case 'selectedSpecies': setSelectedSpecies(value); break;
+      case 'selectedCity': setSelectedCity(value); break;
+      case 'showOpportunityZones': setShowOpportunityZones(value); break;
+      case 'showGardens': setShowGardens(value); break;
+      case 'minConnectivity': setMinConnectivity(value); break;
+      case 'minObservations': setMinObservations(value); break;
+    }
+  };
+
+  const handleClearAllFilters = () => {
+    setWildlifeFilters(WILDLIFE_FILTERS);
+    setSelectedYear(null);
+    setSelectedSeason(null);
+    setSelectedSpecies(null);
+    setSelectedCity(null);
   };
 
   return (
@@ -548,162 +589,6 @@ const DiscoveryMap: React.FC = () => {
         </div>
       )}
 
-      {/* Layers Panel */}
-      <div style={{ position: 'absolute', top: 16, left: 16, backgroundColor: 'white', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', width: 220, overflow: 'hidden', zIndex: 200 }}>
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setLayerPanelOpen(!layerPanelOpen)}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}><Layers size={16} style={{ marginRight: 6 }} />Layers</span>
-          {layerPanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </div>
-        {layerPanelOpen && (
-          <div style={{ padding: 10, maxHeight: 320, overflowY: 'auto' }}>
-            {/* Gardens toggle */}
-            <div 
-              onClick={() => setShowGardens(!showGardens)} 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                padding: '6px 8px', 
-                borderRadius: 6, 
-                cursor: 'pointer', 
-                backgroundColor: showGardens ? '#f0fdf4' : 'transparent',
-                border: '1px solid #22c55e',
-                marginBottom: 8
-              }}
-            >
-              <span style={{ marginRight: 6, fontSize: 14 }}>🌻</span>
-              <span style={{ flex: 1, fontSize: 11, fontWeight: 500 }}>Registered Gardens</span>
-              <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>{gardens.length}</span>
-              {showGardens ? <Eye size={12} color="#22c55e" style={{ marginLeft: 4 }} /> : <EyeOff size={12} color="#ccc" style={{ marginLeft: 4 }} />}
-            </div>
-
-            {!compareMode && (
-              <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                <button onClick={() => setViewMode('grid')} style={{ flex: 1, padding: 4, borderRadius: 4, border: 'none', backgroundColor: viewMode === 'grid' ? '#22c55e' : '#eee', color: viewMode === 'grid' ? 'white' : '#666', cursor: 'pointer', fontSize: 10 }}><Grid3X3 size={10} /> Grid</button>
-                <button onClick={() => setViewMode('points')} style={{ flex: 1, padding: 4, borderRadius: 4, border: 'none', backgroundColor: viewMode === 'points' ? '#22c55e' : '#eee', color: viewMode === 'points' ? 'white' : '#666', cursor: 'pointer', fontSize: 10 }}>📍 Points</button>
-              </div>
-            )}
-            
-            <div style={{ fontSize: 10, color: '#888', marginBottom: 4 }}>WILDLIFE</div>
-            {wildlifeFilters.map(w => (
-              <div key={w.id} onClick={() => toggleWildlife(w.id)} style={{ display: 'flex', alignItems: 'center', padding: '3px 6px', borderRadius: 4, cursor: 'pointer', backgroundColor: w.visible ? `${w.color}15` : 'transparent', marginBottom: 2 }}>
-                <span style={{ marginRight: 5, fontSize: 11 }}>{w.icon}</span>
-                <span style={{ flex: 1, fontSize: 10 }}>{w.name}</span>
-                <span style={{ fontSize: 9, color: '#999', marginRight: 4 }}>{(taxonStats[w.id] || 0).toLocaleString()}</span>
-                {w.visible ? <Eye size={11} color={w.color} /> : <EyeOff size={11} color="#ccc" />}
-              </div>
-            ))}
-            
-            <div style={{ marginTop: 8, padding: 6, backgroundColor: '#f5f5f5', borderRadius: 4, fontSize: 10 }}>
-              {loading ? <span style={{ color: '#888' }}>{progress}</span> : <span>📍 <strong>{visibleFeatures.length.toLocaleString()}</strong> observations</span>}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Timeline/Compare Panel */}
-      <div style={{ position: 'absolute', top: 16, right: 16, backgroundColor: 'white', borderRadius: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', width: 300, overflow: 'hidden', zIndex: 200 }}>
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setTimelinePanelOpen(!timelinePanelOpen)}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}>
-            {compareMode ? <><GitCompare size={16} style={{ marginRight: 6 }} />Compare</> : <><Calendar size={16} style={{ marginRight: 6 }} />Timeline</>}
-          </span>
-          {timelinePanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </div>
-        {timelinePanelOpen && (
-          <div style={{ padding: 10 }}>
-            <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-              <button onClick={() => setCompareMode(false)} style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: 'none', backgroundColor: !compareMode ? '#22c55e' : '#eee', color: !compareMode ? 'white' : '#666', cursor: 'pointer', fontSize: 11, fontWeight: 500 }}>
-                <Calendar size={12} /> Timeline
-              </button>
-              <button onClick={() => setCompareMode(true)} style={{ flex: 1, padding: '6px 10px', borderRadius: 6, border: 'none', backgroundColor: compareMode ? '#2563eb' : '#eee', color: compareMode ? 'white' : '#666', cursor: 'pointer', fontSize: 11, fontWeight: 500 }}>
-                <GitCompare size={12} /> Compare
-              </button>
-            </div>
-            
-            {compareMode ? (
-              <>
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>PRESETS</div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {presets.map(p => (
-                      <button key={p.id} onClick={() => applyPreset(p)} style={{ padding: '5px 10px', borderRadius: 4, border: 'none', backgroundColor: activePreset === p.id ? '#2563eb' : '#eee', color: activePreset === p.id ? 'white' : '#666', cursor: 'pointer', fontSize: 10, fontWeight: activePreset === p.id ? 600 : 400 }}>{p.name}</button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div style={{ marginBottom: 8, padding: 8, backgroundColor: 'rgba(59,130,246,0.1)', borderRadius: 6, border: '2px solid #3b82f6' }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: '#2563eb', marginBottom: 4 }}>🔵 Left: {leftYearRange[0]} - {leftYearRange[1]}</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input type="number" min={minYear} max={maxYear} value={leftYearRange[0]} onChange={e => { setLeftYearRange([parseInt(e.target.value) || minYear, leftYearRange[1]]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                    <input type="number" min={minYear} max={maxYear} value={leftYearRange[1]} onChange={e => { setLeftYearRange([leftYearRange[0], parseInt(e.target.value) || maxYear]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: '#3b82f6', marginTop: 4, fontWeight: 500 }}>{leftFeatures.length.toLocaleString()} observations</div>
-                </div>
-                
-                <div style={{ marginBottom: 8, padding: 8, backgroundColor: 'rgba(234,88,12,0.1)', borderRadius: 6, border: '2px solid #ea580c' }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: '#ea580c', marginBottom: 4 }}>🟠 Right: {rightYearRange[0]} - {rightYearRange[1]}</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input type="number" min={minYear} max={maxYear} value={rightYearRange[0]} onChange={e => { setRightYearRange([parseInt(e.target.value) || minYear, rightYearRange[1]]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                    <input type="number" min={minYear} max={maxYear} value={rightYearRange[1]} onChange={e => { setRightYearRange([rightYearRange[0], parseInt(e.target.value) || maxYear]); setActivePreset(null); }} style={{ flex: 1, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 11 }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: '#ea580c', marginTop: 4, fontWeight: 500 }}>{rightFeatures.length.toLocaleString()} observations</div>
-                </div>
-                
-                <div style={{ backgroundColor: '#f5f5f5', borderRadius: 6, padding: 8 }}>
-                  <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>COMPARISON</div>
-                  {WILDLIFE_FILTERS.slice(0, 4).map(w => {
-                    const left = leftTaxonStats[w.id] || 0;
-                    const right = rightTaxonStats[w.id] || 0;
-                    const change = left > 0 ? Math.round(((right - left) / left) * 100) : (right > 0 ? 999 : 0);
-                    return (
-                      <div key={w.id} style={{ display: 'flex', alignItems: 'center', fontSize: 10, marginBottom: 2 }}>
-                        <span style={{ marginRight: 4 }}>{w.icon}</span>
-                        <span style={{ flex: 1 }}>{w.name}</span>
-                        <span style={{ color: '#3b82f6', width: 40, textAlign: 'right', fontSize: 9 }}>{left.toLocaleString()}</span>
-                        <span style={{ margin: '0 4px', color: '#ccc' }}>→</span>
-                        <span style={{ color: '#ea580c', width: 40, fontSize: 9 }}>{right.toLocaleString()}</span>
-                        <span style={{ width: 45, textAlign: 'right', color: change > 0 ? '#22c55e' : change < 0 ? '#ef4444' : '#999', fontWeight: 600, fontSize: 9 }}>
-                          {change > 100 ? '++' : (change > 0 ? '+' : '')}{Math.min(change, 999)}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>SEASON</div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button onClick={() => setSelectedSeason(null)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: !selectedSeason ? '#22c55e' : '#eee', color: !selectedSeason ? 'white' : '#666', cursor: 'pointer', fontSize: 9 }}>All</button>
-                    {SEASONS.map(s => (
-                      <button key={s.id} onClick={() => setSelectedSeason(selectedSeason === s.id ? null : s.id)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: selectedSeason === s.id ? s.color : '#eee', color: selectedSeason === s.id ? 'white' : '#666', cursor: 'pointer', fontSize: 9 }}>{s.icon}</button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <div style={{ fontSize: 9, color: '#888', marginBottom: 4 }}>YEAR: <span style={{ color: '#2563eb', fontWeight: 600 }}>{selectedYear || 'All'}</span></div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button onClick={() => setPlaying(!playing)} style={{ padding: 6, border: 'none', backgroundColor: playing ? '#ef4444' : '#22c55e', borderRadius: 6, cursor: 'pointer', display: 'flex' }}>
-                      {playing ? <Pause size={12} color="white" /> : <Play size={12} color="white" />}
-                    </button>
-                    <input type="range" min={minYear} max={maxYear} value={selectedYear || maxYear} onChange={e => setSelectedYear(parseInt(e.target.value))} style={{ flex: 1 }} />
-                    <button onClick={() => setSelectedYear(null)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: '#eee', color: '#666', cursor: 'pointer', fontSize: 9 }}>All</button>
-                  </div>
-                </div>
-                
-                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 9, color: '#888' }}>Speed:</span>
-                  {[{ label: '0.5x', ms: 1500 }, { label: '1x', ms: 800 }, { label: '2x', ms: 400 }].map(s => (
-                    <button key={s.label} onClick={() => setPlaySpeed(s.ms)} style={{ padding: '2px 6px', borderRadius: 3, border: 'none', backgroundColor: playSpeed === s.ms ? '#2563eb' : '#eee', color: playSpeed === s.ms ? 'white' : '#666', cursor: 'pointer', fontSize: 8 }}>{s.label}</button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Register Garden Button */}
       {!compareMode && !registerMode && (
         <button
@@ -759,6 +644,43 @@ const DiscoveryMap: React.FC = () => {
           onCancel={() => { setPendingLocation(null); setRegisterMode(false); }}
         />
       )}
+
+      {/* Unified Control Panel */}
+      <UnifiedControlPanel
+        wildlifeFilters={wildlifeFilters}
+        gardens={gardens}
+        opportunityData={opportunityData}
+        wildlifeFeatures={wildlifeFeatures}
+        filteredFeatures={leftFeatures}
+        selectedYear={selectedYear}
+        selectedSeason={selectedSeason}
+        minYear={minYear}
+        maxYear={maxYear}
+        playing={playing}
+        playSpeed={playSpeed}
+        compareMode={compareMode}
+        leftYearRange={leftYearRange}
+        rightYearRange={rightYearRange}
+        selectedSpecies={selectedSpecies}
+        selectedCity={selectedCity}
+        showOpportunityZones={showOpportunityZones}
+        showGardens={showGardens}
+        viewMode={viewMode}
+        onToggleTaxon={toggleWildlife}
+        onSetYear={setSelectedYear}
+        onSetSeason={setSelectedSeason}
+        onSetPlaying={setPlaying}
+        onSetPlaySpeed={setPlaySpeed}
+        onSetCompareMode={setCompareMode}
+        onSetLeftYearRange={setLeftYearRange}
+        onSetRightYearRange={setRightYearRange}
+        onSetSpecies={setSelectedSpecies}
+        onSetCity={setSelectedCity}
+        onSetShowOpportunityZones={setShowOpportunityZones}
+        onSetShowGardens={setShowGardens}
+        onSetViewMode={setViewMode}
+        onClearAll={handleClearAllFilters}
+      />
     </div>
   );
 };
