@@ -1,13 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { 
   PLANTS, 
   Plant, 
-  getPlantsByWaterZone, 
-  getPlantsByBloomMonth,
-  getNativePlants,
-  getHostPlants,
-  getEarlySpringBloomers,
-  getLateFallBloomers,
   calculateHabitatScore
 } from '../config/plants';
 
@@ -331,7 +325,7 @@ export default function AutoLayoutGenerator() {
             <label className="block text-sm text-gray-600 mb-1">Sun Exposure</label>
             <select
               value={config.sunExposure}
-              onChange={(e) => setConfig({ ...config, sunExposure: e.target.value as any })}
+              onChange={(e) => setConfig({ ...config, sunExposure: e.target.value as 'full' | 'partial' | 'shade' })}
               className="w-full px-3 py-2 border rounded-lg"
             >
               <option value="full">Full Sun (6+ hours)</option>
