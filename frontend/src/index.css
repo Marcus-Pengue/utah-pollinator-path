@@ -20,3 +20,19 @@ code {
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* Corridor gap marker pulse animation */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.7);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);
+  }
+}

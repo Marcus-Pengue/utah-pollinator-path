@@ -155,6 +155,7 @@ const DiscoveryMap: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('homeowner');
   const [selectedTaxa, setSelectedTaxa] = useState<string[]>(['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']);
   const [showLayers, setShowLayers] = useState({ observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false, corridors: false });
+  const [corridorSpecies, setCorridorSpecies] = useState('all');
 
   // Sync selectedTaxa with wildlifeFilters visibility
   useEffect(() => {
@@ -691,8 +692,11 @@ const DiscoveryMap: React.FC = () => {
                   score: g.properties?.score || 50,
                   tier: g.properties?.tier || 'Seedling'
                 }))}
-                maxDistance={0.5}
                 visible={showLayers.corridors}
+                selectedSpecies={corridorSpecies}
+                onSelectGap={(lat, lng) => {
+                  setViewState(prev => ({ ...prev, latitude: lat, longitude: lng, zoom: 15 }));
+                }}
               />
             )}
 
@@ -1147,6 +1151,8 @@ const DiscoveryMap: React.FC = () => {
           onToggleGrid={(show) => setShowLayers(prev => ({ ...prev, grid: show }))}
           showCorridors={showLayers.corridors}
           onToggleCorridors={(show) => setShowLayers(prev => ({ ...prev, corridors: show }))}
+          corridorSpecies={corridorSpecies}
+          onCorridorSpeciesChange={setCorridorSpecies}
           selectedTaxa={selectedTaxa || ['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']}
           onTaxaChange={(taxa) => setSelectedTaxa(taxa)}
           selectedCity={selectedCity || ''}

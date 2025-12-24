@@ -23,6 +23,8 @@ interface UnifiedInterfaceProps {
   onToggleGrid: (show: boolean) => void;
   showCorridors?: boolean;
   onToggleCorridors?: (show: boolean) => void;
+  corridorSpecies?: string;
+  onCorridorSpeciesChange?: (species: string) => void;
   // Taxa filters
   selectedTaxa: string[];
   onTaxaChange: (taxa: string[]) => void;
@@ -284,6 +286,28 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
               />
               <span style={{ fontSize: 13 }}>🔗 Pollinator Corridors</span>
             </label>
+            {props.showCorridors && props.onCorridorSpeciesChange && (
+              <select
+                value={props.corridorSpecies || 'all'}
+                onChange={(e) => props.onCorridorSpeciesChange?.(e.target.value)}
+                style={{
+                  marginTop: 8,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #ddd',
+                  fontSize: 12,
+                  backgroundColor: 'white',
+                  width: '100%',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="all">🦋 All Pollinators (500m)</option>
+                <option value="bee">🐝 Bees (300m range)</option>
+                <option value="butterfly">🦋 Butterflies (800m range)</option>
+                <option value="hummingbird">🐦 Hummingbirds (1.2km range)</option>
+                <option value="moth">🌙 Moths (500m range)</option>
+              </select>
+            )}
           </div>
         )}
 
