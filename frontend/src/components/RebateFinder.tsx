@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { REBATE_PROGRAMS, RebateProgram } from '../config';
 import RebateApplication from './RebateApplication';
 import { DollarSign, Droplets, Leaf, ExternalLink, MapPin, CheckCircle, ChevronDown, ChevronUp, Calculator, AlertCircle } from 'lucide-react';
 

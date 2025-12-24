@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { POLLINATOR_SPECIES } from '../config';
 import { AlertTriangle, MapPin, Target, TrendingUp, Zap, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Navigation, Users, Leaf } from 'lucide-react';
 
 interface Garden {
@@ -39,13 +40,10 @@ interface CorridorGapAnalysisProps {
   onExport?: (data: any) => void;
 }
 
-// Species flight ranges in meters
-const SPECIES_RANGES = {
-  bee: { range: 300, name: 'Native Bees', icon: '🐝' },
-  butterfly: { range: 800, name: 'Butterflies', icon: '🦋' },
-  hummingbird: { range: 1200, name: 'Hummingbirds', icon: '🐦' },
-  moth: { range: 500, name: 'Moths', icon: '🦋' },
-};
+// Generate from central config
+const SPECIES_RANGES = Object.fromEntries(
+  POLLINATOR_SPECIES.map(s => [s.id, { range: s.flightRange, name: s.name, icon: s.icon }])
+);
 
 const PRIORITY_CONFIG = {
   critical: { color: '#dc2626', bg: '#fef2f2', label: 'Critical', score: 100 },

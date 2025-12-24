@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronUp, Eye, EyeOff, Zap, Map, Grid3X3, Circle
 } from 'lucide-react';
 import ModeSelector, { AppMode } from './ModeSelector';
+import { TAXA_CATEGORIES } from '../config';
 export type { AppMode };
 
 interface UnifiedInterfaceProps {
@@ -63,16 +64,8 @@ interface UnifiedInterfaceProps {
   onRightYearChange?: (range: [number, number]) => void;
 }
 
-const TAXA = [
-  { id: 'Insecta', label: 'Insects', icon: '🐝', color: '#f59e0b' },
-  { id: 'Aves', label: 'Birds', icon: '🐦', color: '#3b82f6' },
-  { id: 'Plantae', label: 'Plants', icon: '🌿', color: '#22c55e' },
-  { id: 'Mammalia', label: 'Mammals', icon: '🦊', color: '#f97316' },
-  { id: 'Reptilia', label: 'Reptiles', icon: '🦎', color: '#84cc16' },
-  { id: 'Amphibia', label: 'Amphibians', icon: '🐸', color: '#06b6d4' },
-  { id: 'Arachnida', label: 'Arachnids', icon: '🕷️', color: '#6b7280' },
-  { id: 'Fungi', label: 'Fungi', icon: '🍄', color: '#a855f7' },
-];
+// Use central config
+const TAXA = TAXA_CATEGORIES;
 
 const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
