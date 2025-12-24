@@ -44,3 +44,5 @@ Fetching GBIF Aves...
     Error at offset 60600: Response payload is not completed: <TransferEncodingError: 400, message='Not enough data to satisfy transfer length header.'>. ConnectionResetError(54, 'Connection reset by peer') (1/5)
     Aves: 57,000 collected
     Aves: 60,000 collected
+    Aves: 63,000 collected
+    Aves: 66,000 collected
