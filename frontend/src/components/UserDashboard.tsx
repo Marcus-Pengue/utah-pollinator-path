@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import INaturalistSync from './INaturalistSync';
 import NeighborDiscovery from './NeighborDiscovery';
+import GardenPlanner from './GardenPlanner';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
@@ -63,7 +64,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   onEditGarden,
   onStartCapture
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner'>('overview');
 
   if (!isOpen) return null;
 
@@ -323,6 +324,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             { id: 'observations', label: 'Obs', icon: Camera },
             { id: 'network', label: 'Network', icon: Users },
             { id: 'achievements', label: 'Awards', icon: Award },
+            { id: 'planner', label: 'Planner', icon: Leaf },
           ].map(tab => (
             <button
               key={tab.id}
@@ -721,6 +723,15 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               )}
             </div>
           )}
+
+          {/* Planner Section */}
+          {activeSection === 'planner' && (
+            <GardenPlanner
+              existingPlants={gardenData?.plants?.map((p: any) => p.id) || []}
+              onAddPlant={(plant) => console.log('Added plant:', plant)}
+            />
+          )}
+
         </div>
       </div>
     </div>

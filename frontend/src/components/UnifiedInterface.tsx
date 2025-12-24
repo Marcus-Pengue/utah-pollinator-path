@@ -21,6 +21,8 @@ interface UnifiedInterfaceProps {
   onToggleHeatmap: (show: boolean) => void;
   showGrid: boolean;
   onToggleGrid: (show: boolean) => void;
+  showCorridors?: boolean;
+  onToggleCorridors?: (show: boolean) => void;
   // Taxa filters
   selectedTaxa: string[];
   onTaxaChange: (taxa: string[]) => void;
@@ -269,6 +271,21 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
             </div>
           )}
         </div>
+
+        {/* Corridors - Government/Academic only */}
+        {(props.mode === 'government' || props.mode === 'academic') && props.onToggleCorridors && (
+          <div style={{ marginTop: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={props.showCorridors || false}
+                onChange={(e) => props.onToggleCorridors?.(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: features.primaryColor }}
+              />
+              <span style={{ fontSize: 13 }}>🔗 Pollinator Corridors</span>
+            </label>
+          </div>
+        )}
 
         {/* Taxa Filters Section */}
         <div>

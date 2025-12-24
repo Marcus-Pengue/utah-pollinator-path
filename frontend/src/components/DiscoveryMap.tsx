@@ -10,6 +10,7 @@ import INaturalistUpload from './iNaturalistUpload';
 import UserDashboard from './UserDashboard';
 import Leaderboard from './Leaderboard';
 import AdminDashboard from './AdminDashboard';
+import CorridorVisualization from './CorridorVisualization';
 import UnifiedInterface from './UnifiedInterface';
 import { AppMode } from './ModeSelector';
 import SpeciesSearch from './SpeciesSearch';
@@ -153,7 +154,7 @@ const DiscoveryMap: React.FC = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [appMode, setAppMode] = useState<AppMode>('homeowner');
   const [selectedTaxa, setSelectedTaxa] = useState<string[]>(['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']);
-  const [showLayers, setShowLayers] = useState({ observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false });
+  const [showLayers, setShowLayers] = useState({ observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false, corridors: false });
 
   // Sync selectedTaxa with wildlifeFilters visibility
   useEffect(() => {
@@ -276,9 +277,9 @@ const DiscoveryMap: React.FC = () => {
   // Reset layer visibility when switching modes
   useEffect(() => {
     const modeDefaults: Record<AppMode, typeof showLayers> = {
-      government: { observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false },
-      homeowner: { observations: false, gardens: true, opportunityZones: true, heatmap: false, grid: false },
-      academic: { observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false },
+      government: { observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false, corridors: false },
+      homeowner: { observations: false, gardens: true, opportunityZones: true, heatmap: false, grid: false, corridors: false },
+      academic: { observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false, corridors: false },
     };
     setShowLayers(modeDefaults[appMode]);
     // Also reset city filter when switching modes
@@ -680,6 +681,21 @@ const DiscoveryMap: React.FC = () => {
               </Source>
             )}
 
+            {/* Corridor Visualization */}
+            {showLayers.corridors && gardens && (
+              <CorridorVisualization
+                gardens={gardens.map((g: any) => ({
+                  id: g.properties?.id || String(Math.random()),
+                  lat: g.geometry?.coordinates?.[1] || 0,
+                  lng: g.geometry?.coordinates?.[0] || 0,
+                  score: g.properties?.score || 50,
+                  tier: g.properties?.tier || 'Seedling'
+                }))}
+                maxDistance={0.5}
+                visible={showLayers.corridors}
+              />
+            )}
+
 
             <Source id="heat-left" type="geojson" data={leftHeatmap}>
             <Layer id="heatmap-left" type="heatmap" paint={{
@@ -769,6 +785,7 @@ const DiscoveryMap: React.FC = () => {
               </div>
             </Marker>
           ))}
+
 
           {/* Pending location marker */}
           {pendingLocation && (
@@ -1065,7 +1082,7 @@ const DiscoveryMap: React.FC = () => {
           alignItems: 'center',
           gap: 8,
           boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-          zIndex: 100,
+          zIndex: 500,
           fontWeight: 600,
           fontSize: 14
         }}
@@ -1128,6 +1145,8 @@ const DiscoveryMap: React.FC = () => {
           onToggleHeatmap={(show) => setShowLayers(prev => ({ ...prev, heatmap: show }))}
           showGrid={showLayers.grid}
           onToggleGrid={(show) => setShowLayers(prev => ({ ...prev, grid: show }))}
+          showCorridors={showLayers.corridors}
+          onToggleCorridors={(show) => setShowLayers(prev => ({ ...prev, corridors: show }))}
           selectedTaxa={selectedTaxa || ['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']}
           onTaxaChange={(taxa) => setSelectedTaxa(taxa)}
           selectedCity={selectedCity || ''}
