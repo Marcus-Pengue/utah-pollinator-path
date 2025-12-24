@@ -42,6 +42,13 @@ interface UnifiedInterfaceProps {
   onRegisterGarden: () => void;
   onExportData: () => void;
   hasRegisteredGarden: boolean;
+  // Compare mode
+  compareMode?: boolean;
+  onToggleCompare?: (enabled: boolean) => void;
+  leftYearRange?: [number, number];
+  rightYearRange?: [number, number];
+  onLeftYearChange?: (range: [number, number]) => void;
+  onRightYearChange?: (range: [number, number]) => void;
 }
 
 const TAXA = [
@@ -432,6 +439,84 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
             </div>
           )}
         </div>
+
+        {/* Compare Mode - Government & Academic only */}
+        {(props.mode === 'government' || props.mode === 'academic') && props.onToggleCompare && (
+          <div style={{ 
+            backgroundColor: 'white', 
+            borderRadius: 10, 
+            padding: 12,
+            marginBottom: 12,
+            boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              marginBottom: props.compareMode ? 12 : 0
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>📊 Compare Years</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={props.compareMode || false}
+                  onChange={(e) => props.onToggleCompare?.(e.target.checked)}
+                  style={{ width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: 12 }}>Enable</span>
+              </label>
+            </div>
+            
+            {props.compareMode && (
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, color: '#666', display: 'block', marginBottom: 4 }}>Left Map</label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2025}
+                      value={props.leftYearRange?.[0] || 2000}
+                      onChange={(e) => props.onLeftYearChange?.([Number(e.target.value), props.leftYearRange?.[1] || 2020])}
+                      style={{ width: 60, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+                    />
+                    <span style={{ color: '#999' }}>-</span>
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2025}
+                      value={props.leftYearRange?.[1] || 2020}
+                      onChange={(e) => props.onLeftYearChange?.([props.leftYearRange?.[0] || 2000, Number(e.target.value)])}
+                      style={{ width: 60, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 10, color: '#666', display: 'block', marginBottom: 4 }}>Right Map</label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2025}
+                      value={props.rightYearRange?.[0] || 2021}
+                      onChange={(e) => props.onRightYearChange?.([Number(e.target.value), props.rightYearRange?.[1] || 2025])}
+                      style={{ width: 60, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+                    />
+                    <span style={{ color: '#999' }}>-</span>
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2025}
+                      value={props.rightYearRange?.[1] || 2025}
+                      onChange={(e) => props.onRightYearChange?.([props.rightYearRange?.[0] || 2021, Number(e.target.value)])}
+                      style={{ width: 60, padding: 4, borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions Section */}
         <div>

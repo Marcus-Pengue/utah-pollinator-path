@@ -129,7 +129,7 @@ const DiscoveryMap: React.FC = () => {
   
   const [compareMode, setCompareMode] = useState(false);
   const [sliderPosition, setSliderPosition] = useState(50);
-  const [leftYearRange, setLeftYearRange] = useState<[number, number]>([1920, 1930]);
+  const [leftYearRange, setLeftYearRange] = useState<[number, number]>([2015, 2020]);
   const [rightYearRange, setRightYearRange] = useState<[number, number]>([2020, 2025]);
   const [isDragging, setIsDragging] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
@@ -286,12 +286,14 @@ const DiscoveryMap: React.FC = () => {
   }, [appMode]);
 
   // Sync observations layer toggle with taxa selection
+  // Note: Taxa filters affect BOTH points and heatmap
+  // Observations toggle only hides the points layer, not the heatmap
   useEffect(() => {
-    if (!showLayers.observations) {
-      // When observations layer is hidden, clear all taxa
+    if (!showLayers.observations && !showLayers.heatmap) {
+      // Only clear taxa if BOTH observations and heatmap are off
       setSelectedTaxa([]);
     }
-  }, [showLayers.observations]);
+  }, [showLayers.observations, showLayers.heatmap]);
 
   // When all taxa are deselected, hide observations layer
   useEffect(() => {
@@ -451,9 +453,16 @@ const DiscoveryMap: React.FC = () => {
   const filterByYear = (features: Feature[], yearRange: [number, number]) => {
     return features.filter(f => {
       const props = f.properties || {};
-      const year = props.year;
-      const month = props.month;
-      if (year && (year < yearRange[0] || year > yearRange[1])) return false;
+      // Get year from year property or observed_on date
+      let year = props.year;
+      let month = props.month;
+      if (!year && props.observed_on) {
+        const date = new Date(props.observed_on);
+        year = date.getFullYear();
+        month = date.getMonth() + 1;
+      }
+      if (!year) return true; // Include if no date info
+      if (year < yearRange[0] || year > yearRange[1]) return false;
       if (selectedSeason) {
         const season = SEASONS.find(s => s.id === selectedSeason);
         if (season && month && !season.months.includes(month)) return false;
@@ -474,8 +483,14 @@ const DiscoveryMap: React.FC = () => {
   const filterAll = (features: Feature[]) => {
     return features.filter(f => {
       const props = f.properties || {};
-      const year = props.year;
-      const month = props.month;
+      // Get year from year property or observed_on date
+      let year = props.year;
+      let month = props.month;
+      if (!year && props.observed_on) {
+        const date = new Date(props.observed_on);
+        year = date.getFullYear();
+        month = date.getMonth() + 1;
+      }
       if (selectedYear && year !== selectedYear) return false;
       // Species filter
       if (selectedSpecies) {
@@ -597,7 +612,76 @@ const DiscoveryMap: React.FC = () => {
         >
           {!compareMode && <NavigationControl position="bottom-right" />}
           
-          <Source id="heat-left" type="geojson" data={leftHeatmap}>
+          
+            {/* Heatmap Layer - Observation Density */}
+            {showLayers.heatmap && leftFeatures && leftFeatures.length > 0 && (
+              <Source
+                id="heatmap-source"
+                type="geojson"
+                data={{
+                  type: 'FeatureCollection',
+                  features: leftFeatures || []
+                }}
+              >
+                <Layer
+                  id="heatmap-layer"
+                  type="heatmap"
+                  paint={{
+                    // Increase weight based on frequency/importance
+                    'heatmap-weight': [
+                      'interpolate',
+                      ['linear'],
+                      ['get', 'count'],
+                      0, 0.1,
+                      10, 1
+                    ],
+                    // Increase intensity as zoom level increases
+                    'heatmap-intensity': [
+                      'interpolate',
+                      ['linear'],
+                      ['zoom'],
+                      0, 0.5,
+                      9, 1,
+                      12, 2
+                    ],
+                    // Color gradient from blue (low) to red (high)
+                    'heatmap-color': [
+                      'interpolate',
+                      ['linear'],
+                      ['heatmap-density'],
+                      0, 'rgba(0, 0, 255, 0)',
+                      0.1, 'rgba(65, 105, 225, 0.5)',
+                      0.3, 'rgba(0, 255, 128, 0.6)',
+                      0.5, 'rgba(255, 255, 0, 0.7)',
+                      0.7, 'rgba(255, 165, 0, 0.8)',
+                      1, 'rgba(255, 0, 0, 0.9)'
+                    ],
+                    // Radius increases with zoom
+                    'heatmap-radius': [
+                      'interpolate',
+                      ['linear'],
+                      ['zoom'],
+                      0, 2,
+                      8, 15,
+                      12, 25,
+                      15, 35
+                    ],
+                    // Fade out heatmap at high zoom to show points
+                    'heatmap-opacity': [
+                      'interpolate',
+                      ['linear'],
+                      ['zoom'],
+                      12, 1,
+                      15, 0.5,
+                      17, 0
+                    ]
+                  }}
+                />
+              </Source>
+            )}
+
+
+            <Source id="heat-left" type="geojson" data={leftHeatmap}>
             <Layer id="heatmap-left" type="heatmap" paint={{
               ...heatmapPaint,
               'heatmap-color': compareMode 
@@ -1028,6 +1112,12 @@ const DiscoveryMap: React.FC = () => {
         <UnifiedInterface
           mode={appMode}
           onModeChange={setAppMode}
+          compareMode={compareMode}
+          onToggleCompare={setCompareMode}
+          leftYearRange={leftYearRange}
+          rightYearRange={rightYearRange}
+          onLeftYearChange={setLeftYearRange}
+          onRightYearChange={setRightYearRange}
           showOpportunityZones={showLayers.opportunityZones}
           onToggleOpportunityZones={(show) => setShowLayers(prev => ({ ...prev, opportunityZones: show }))}
           showGardens={showLayers.gardens}
