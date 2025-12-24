@@ -511,6 +511,8 @@ const DiscoveryMap: React.FC = () => {
         month = date.getMonth() + 1;
       }
       if (selectedYear && year !== selectedYear) return false;
+      // Filter by selected month from timeline
+      if (selectedMonth && month !== selectedMonth) return false;
       // Species filter
       if (selectedSpecies) {
         const name = (props.species || props.common_name || '').toLowerCase();
@@ -536,7 +538,7 @@ const DiscoveryMap: React.FC = () => {
   const leftFeatures = useMemo(() => {
     if (compareMode) return filterByYear(wildlifeFeatures, leftYearRange);
     return filterAll(wildlifeFeatures);
-  }, [wildlifeFeatures, leftYearRange, compareMode, selectedYear, selectedSeason, wildlifeFilters, selectedCity]);
+  }, [wildlifeFeatures, leftYearRange, compareMode, selectedYear, selectedMonth, selectedSeason, wildlifeFilters, selectedCity]);
   
   const rightFeatures = useMemo(() => {
     if (compareMode) return filterByYear(wildlifeFeatures, rightYearRange);
