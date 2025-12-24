@@ -41,7 +41,10 @@ def home():
     })
 
 # Cached wildlife data routes
+# Try full cache first, fallback to sample
 CACHE_FILE = os.path.join(app.static_folder, "wildlife_cache.json")
+if not os.path.exists(CACHE_FILE):
+    CACHE_FILE = os.path.join(app.static_folder, "wildlife_cache_sample.json")
 _cache = None
 
 def load_cache():
