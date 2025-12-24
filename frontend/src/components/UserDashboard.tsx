@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import INaturalistSync from './INaturalistSync';
 import NeighborDiscovery from './NeighborDiscovery';
 import GardenPlanner from './GardenPlanner';
+import BloomTracker from './BloomTracker';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
-  BarChart3, Target, Zap, Crown
-} from 'lucide-react';
+  BarChart3, Target, Zap, Crown, Flower2} from 'lucide-react';
 import VerificationSystem, { VerificationStatus, PlantEntry } from './VerificationSystem';
 import NeighborRecruitment from './NeighborRecruitment';
 
@@ -64,7 +64,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   onEditGarden,
   onStartCapture
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms'>('overview');
 
   if (!isOpen) return null;
 
@@ -325,6 +325,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             { id: 'network', label: 'Network', icon: Users },
             { id: 'achievements', label: 'Awards', icon: Award },
             { id: 'planner', label: 'Planner', icon: Leaf },
+            { id: 'blooms', label: 'Blooms', icon: Flower2 },
           ].map(tab => (
             <button
               key={tab.id}
@@ -729,6 +730,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             <GardenPlanner
               existingPlants={gardenData?.plants?.map((p: any) => p.id) || []}
               onAddPlant={(plant) => console.log('Added plant:', plant)}
+            />
+          )}
+
+          {/* Blooms Section */}
+          {activeSection === 'blooms' && (
+            <BloomTracker
+              onPlantSelect={(plant) => console.log('Selected plant:', plant)}
             />
           )}
 
