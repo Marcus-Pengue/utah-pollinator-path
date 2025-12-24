@@ -14,3 +14,5 @@ data/expanded_cache/*.json
 !src/static/downloads/*.gz
 src/static/wildlife_cache.json
 static/wildlife_cache.json
+src/static/wildlife_cache.json
+static/wildlife_cache.json

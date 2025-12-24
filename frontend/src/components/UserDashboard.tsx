@@ -653,77 +653,36 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
           )}
 
           {/* Achievements Section */}
-          {gardenData && activeSection === 'achievements' && (
-            <div>
-              {/* Earned */}
-              <div style={{ marginBottom: 20 }}>
-                <h4 style={{ margin: '0 0 12px', fontSize: 14, color: '#166534' }}>
-                  🏆 Earned ({earnedAchievements.length}/{achievements.length})
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                  {earnedAchievements.map(a => (
-                    <div
-                      key={a.id}
-                      style={{
-                        backgroundColor: 'white',
-                        borderRadius: 10,
-                        padding: 12,
-                        border: '2px solid #22c55e'
-                      }}
-                    >
-                      <div style={{ fontSize: 28, marginBottom: 6 }}>{a.icon}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{a.name}</div>
-                      <div style={{ fontSize: 10, color: '#666' }}>{a.description}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* In Progress */}
-              {inProgressAchievements.length > 0 && (
-                <div>
-                  <h4 style={{ margin: '0 0 12px', fontSize: 14, color: '#666' }}>
-                    🎯 In Progress
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {inProgressAchievements.map(a => (
-                      <div
-                        key={a.id}
-                        style={{
-                          backgroundColor: 'white',
-                          borderRadius: 10,
-                          padding: 12
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 24 }}>{a.icon}</span>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>{a.name}</div>
-                            <div style={{ fontSize: 10, color: '#666' }}>{a.description}</div>
-                            <div style={{
-                              marginTop: 6,
-                              height: 6,
-                              backgroundColor: '#e5e7eb',
-                              borderRadius: 3,
-                              overflow: 'hidden'
-                            }}>
-                              <div style={{
-                                height: '100%',
-                                width: `${((a.progress || 0) / (a.target || 1)) * 100}%`,
-                                backgroundColor: '#22c55e'
-                              }} />
-                            </div>
-                            <div style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
-                              {a.progress}/{a.target}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          {activeSection === 'achievements' && (
+            <AchievementBadges
+              userStats={{
+                gardenScore: gardenData?.score || 0,
+                plantCount: gardenData?.plants?.length || 0,
+                observationCount: observations?.length || 0,
+                speciesCount: new Set(observations?.map((o: any) => o.species).filter(Boolean)).size || 0,
+                neighborCount: gardenData?.referralCount || 0,
+                messagesCount: 0,
+                daysActive: gardenData?.registeredAt ? Math.max(1, Math.ceil((Date.now() - new Date(gardenData.registeredAt).getTime()) / (1000 * 60 * 60 * 24))) : 1,
+                monthsWithObservations: new Set(observations?.map((o: any) => {
+                  if (!o.observed_on) return null;
+                  const date = new Date(o.observed_on);
+                  return `${date.getFullYear()}-${date.getMonth()}`;
+                }).filter(Boolean)).size || 0,
+                corridorConnections: 0,
+              }}
+              onBadgeUnlock={(badge) => {
+                // Show toast notification for unlocked badge
+                const toast = document.createElement('div');
+                toast.innerHTML = `<span style="font-size:24px;margin-right:8px;">🏆</span> Badge Unlocked: <strong>${badge.name}</strong>!`;
+                toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#22c55e,#16a34a);color:white;padding:16px 28px;border-radius:12px;z-index:9999;font-weight:500;box-shadow:0 8px 24px rgba(34,197,94,0.4);display:flex;align-items:center;font-size:15px;';
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                  toast.style.opacity = '0';
+                  toast.style.transition = 'opacity 0.3s';
+                  setTimeout(() => toast.remove(), 300);
+                }, 3000);
+              }}
+            />
           )}
 
           {/* Planner Section */}
