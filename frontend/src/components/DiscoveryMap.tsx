@@ -11,7 +11,7 @@ import UserDashboard from './UserDashboard';
 import Leaderboard from './Leaderboard';
 import AdminDashboard from './AdminDashboard';
 import CorridorVisualization from './CorridorVisualization';
-import SeasonalTimeline from './SeasonalTimeline';
+import CorridorGapAnalysis from './CorridorGapAnalysis';
 import UnifiedInterface from './UnifiedInterface';
 import { AppMode } from './ModeSelector';
 import SpeciesSearch from './SpeciesSearch';
@@ -158,6 +158,7 @@ const DiscoveryMap: React.FC = () => {
   const [selectedTaxa, setSelectedTaxa] = useState<string[]>(['Insecta', 'Aves', 'Plantae', 'Mammalia', 'Reptilia', 'Amphibia', 'Arachnida', 'Fungi']);
   const [showLayers, setShowLayers] = useState({ observations: true, gardens: true, opportunityZones: true, heatmap: false, grid: false, corridors: false });
   const [corridorSpecies, setCorridorSpecies] = useState('all');
+  const [showGapAnalysis, setShowGapAnalysis] = useState(false);
 
   // Sync selectedTaxa with wildlifeFilters visibility
   useEffect(() => {
@@ -1089,21 +1090,6 @@ const DiscoveryMap: React.FC = () => {
 
       
       
-      {/* Seasonal Timeline - Government/Academic modes */}
-      {(appMode === 'government' || appMode === 'academic') && !compareMode && (
-        <div style={{ position: 'absolute', bottom: 20, left: 20, zIndex: 150 }}>
-          <SeasonalTimeline
-            availableYears={availableYears}
-            currentYear={selectedYear || availableYears[availableYears.length - 1] || 2024}
-            currentMonth={selectedMonth || new Date().getMonth() + 1}
-            onYearChange={(year) => setSelectedYear(year)}
-            onMonthChange={(month) => setSelectedMonth(month)}
-            observationCounts={monthCounts || {}}
-            isPlaying={playing}
-            onPlayingChange={setPlaying}
-          />
-        </div>
-      )}
 
 
       {/* Leaderboard Button */}
@@ -1206,6 +1192,14 @@ const DiscoveryMap: React.FC = () => {
           onRegisterGarden={() => setRegisterMode(true)}
           onExportData={() => {}}
           hasRegisteredGarden={!!userGardenData}
+        
+          availableYears={availableYears}
+          currentYear={selectedYear}
+          currentMonth={selectedMonth}
+          onYearChange={setSelectedYear}
+          onMonthChange={setSelectedMonth}
+          isPlaying={playing}
+          onPlayingChange={setPlaying}
         />
       )}
 

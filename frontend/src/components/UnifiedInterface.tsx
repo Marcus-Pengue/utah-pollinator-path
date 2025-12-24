@@ -46,6 +46,14 @@ interface UnifiedInterfaceProps {
   onRegisterGarden: () => void;
   onExportData: () => void;
   hasRegisteredGarden: boolean;
+  // Timeline props
+  availableYears?: number[];
+  currentYear?: number | null;
+  currentMonth?: number | null;
+  onYearChange?: (year: number | null) => void;
+  onMonthChange?: (month: number | null) => void;
+  isPlaying?: boolean;
+  onPlayingChange?: (playing: boolean) => void;
   // Compare mode
   compareMode?: boolean;
   onToggleCompare?: (enabled: boolean) => void;
@@ -462,6 +470,73 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
                   ))}
                 </select>
               </div>
+          {/* Time Filter - Government/Academic */}
+          {(props.mode === 'government' || props.mode === 'academic') && props.availableYears && props.availableYears?.length > 0 && (
+            <div style={{ marginTop: 16, padding: 12, backgroundColor: '#fefce8', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6, color: '#854d0e' }}>
+                ⏱️ Time Travel
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <select
+                  value={props.currentYear || ''}
+                  onChange={(e) => props.onYearChange?.(e.target.value ? Number(e.target.value) : null)}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #fde047', fontSize: 12, backgroundColor: 'white' }}
+                >
+                  <option value="">All Years</option>
+                  {props.availableYears?.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <select
+                  value={props.currentMonth || ''}
+                  onChange={(e) => props.onMonthChange?.(e.target.value ? Number(e.target.value) : null)}
+                  style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #fde047', fontSize: 12, backgroundColor: 'white' }}
+                >
+                  <option value="">All Months</option>
+                  {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                    <option key={m} value={i + 1}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => props.onPlayingChange?.(!props.isPlaying)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  backgroundColor: props.isPlaying ? '#ef4444' : '#22c55e',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6
+                }}
+              >
+                {props.isPlaying ? '⏸️ Pause' : '▶️ Animate Through Time'}
+              </button>
+              {(props.currentYear || props.currentMonth) && (
+                <button
+                  onClick={() => { props.onYearChange?.(null); props.onMonthChange?.(null); }}
+                  style={{
+                    width: '100%',
+                    marginTop: 8,
+                    padding: '8px 12px',
+                    backgroundColor: 'transparent',
+                    color: '#854d0e',
+                    border: '1px solid #fde047',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Clear Time Filter
+                </button>
+              )}
+            </div>
+          )}
+
 
               {/* Year Range */}
               <div>
