@@ -33,3 +33,21 @@ export const SCORING_CONFIG = {
     { name: 'Habitat Hero', minScore: 90, color: '#8b5cf6', icon: '⭐' },
   ],
 };
+
+// Re-export plant utilities
+export {
+  PLANTS,
+  PLANT_COUNT,
+  getPlantById,
+  getPlantsByCategory,
+  getPlantsByWaterZone,
+  getPlantsByBloomMonth,
+  getPlantsForPollinator,
+  getHostPlants,
+  getNativePlants,
+  getEarlySpringBloomers,
+  getLateFallBloomers,
+  getLowestWaterPlants,
+  getCompanions,
+  calculateHabitatScore
+} from './plants';
