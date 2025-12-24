@@ -9,6 +9,7 @@ import INaturalistUpload from './iNaturalistUpload';
 
 import UserDashboard from './UserDashboard';
 import Leaderboard from './Leaderboard';
+import AdminDashboard from './AdminDashboard';
 import UnifiedInterface from './UnifiedInterface';
 import { AppMode } from './ModeSelector';
 import SpeciesSearch from './SpeciesSearch';
@@ -171,6 +172,8 @@ const DiscoveryMap: React.FC = () => {
 
 
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [adminKeyPresses, setAdminKeyPresses] = useState<number[]>([]);
 
   const mapRef = useRef<any>(null);  // Sample leaderboard data (will be replaced with real API data)
   const sampleGardens = [
@@ -213,6 +216,25 @@ const DiscoveryMap: React.FC = () => {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
+  // Admin access: press 'x' 5 times within 2 seconds
+  useEffect(() => {
+    const handleAdminKey = (e: KeyboardEvent) => {
+      if (e.key === 'x' || e.key === 'X') {
+        const now = Date.now();
+        setAdminKeyPresses(prev => {
+          const recent = [...prev, now].filter(t => now - t < 2000);
+          if (recent.length >= 5) {
+            setShowAdminDashboard(true);
+            return [];
+          }
+          return recent;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleAdminKey);
+    return () => window.removeEventListener('keydown', handleAdminKey);
+  }, []);
+
 
   // Compute filtered observation count based on selected taxa
   const filteredObservationCount = useMemo(() => {
@@ -734,6 +756,7 @@ const DiscoveryMap: React.FC = () => {
             </Popup>
           )}
         </MapGL>
+      
       </div>
 
       {/* Right map */}
@@ -748,6 +771,7 @@ const DiscoveryMap: React.FC = () => {
               }} />
             </Source>
           </MapGL>
+      
         </div>
       )}
 
@@ -1095,6 +1119,12 @@ const DiscoveryMap: React.FC = () => {
 
       {/* Unified Control Panel */}
       
+    
+      {/* Admin Dashboard */}
+      <AdminDashboard
+        isOpen={showAdminDashboard}
+        onClose={() => setShowAdminDashboard(false)}
+      />
     </div>
   );
 };

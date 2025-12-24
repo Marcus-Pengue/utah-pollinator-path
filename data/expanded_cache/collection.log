@@ -472,3 +472,103 @@ Taxon: Crustacea
 [2025-12-23 15:56:50]   iNat Crustacea 2019 p20: 4000 new
 [2025-12-23 15:57:25]   iNat Crustacea 2019 p30: 6000 new
 [2025-12-23 15:58:06]   iNat Crustacea 2019 p40: 8000 new
+[2025-12-23 15:58:41]   iNat Crustacea 2019 p50: 10000 new
+[2025-12-23 15:58:41]   2019: 10,000 observations
+[2025-12-23 15:59:16]   iNat Crustacea 2020 p10: 2000 new
+[2025-12-23 15:59:52]   iNat Crustacea 2020 p20: 4000 new
+[2025-12-23 16:00:29]   iNat Crustacea 2020 p30: 6000 new
+[2025-12-23 16:01:07]   iNat Crustacea 2020 p40: 8000 new
+[2025-12-23 16:01:41]   iNat Crustacea 2020 p50: 10000 new
+[2025-12-23 16:01:41]   2020: 10,000 observations
+[2025-12-23 16:02:16]   iNat Crustacea 2021 p10: 2000 new
+[2025-12-23 16:02:51]   iNat Crustacea 2021 p20: 4000 new
+[2025-12-23 16:03:27]   iNat Crustacea 2021 p30: 6000 new
+[2025-12-23 16:04:02]   iNat Crustacea 2021 p40: 8000 new
+[2025-12-23 16:04:35]   iNat Crustacea 2021 p50: 10000 new
+[2025-12-23 16:04:35]   2021: 10,000 observations
+[2025-12-23 16:05:08]   iNat Crustacea 2022 p10: 2000 new
+[2025-12-23 16:05:42]   iNat Crustacea 2022 p20: 4000 new
+[2025-12-23 16:06:15]   iNat Crustacea 2022 p30: 6000 new
+[2025-12-23 16:06:49]   iNat Crustacea 2022 p40: 8000 new
+[2025-12-23 16:07:21]   iNat Crustacea 2022 p50: 10000 new
+[2025-12-23 16:07:21]   2022: 10,000 observations
+[2025-12-23 16:07:55]   iNat Crustacea 2023 p10: 2000 new
+[2025-12-23 16:08:28]   iNat Crustacea 2023 p20: 4000 new
+[2025-12-23 16:09:01]   iNat Crustacea 2023 p30: 6000 new
+[2025-12-23 16:09:33]   iNat Crustacea 2023 p40: 8000 new
+[2025-12-23 16:10:05]   iNat Crustacea 2023 p50: 10000 new
+[2025-12-23 16:10:05]   2023: 10,000 observations
+[2025-12-23 16:10:39]   iNat Crustacea 2024 p10: 2000 new
+[2025-12-23 16:11:14]   iNat Crustacea 2024 p20: 4000 new
+[2025-12-23 16:11:48]   iNat Crustacea 2024 p30: 6000 new
+[2025-12-23 16:12:21]   iNat Crustacea 2024 p40: 8000 new
+[2025-12-23 16:12:54]   iNat Crustacea 2024 p50: 10000 new
+[2025-12-23 16:12:54]   2024: 10,000 observations
+[2025-12-23 16:13:26]   iNat Crustacea 2025 p10: 2000 new
+[2025-12-23 16:13:58]   iNat Crustacea 2025 p20: 4000 new
+[2025-12-23 16:14:31]   iNat Crustacea 2025 p30: 6000 new
+[2025-12-23 16:15:02]   iNat Crustacea 2025 p40: 8000 new
+[2025-12-23 16:15:30]   iNat Crustacea 2025 p50: 10000 new
+[2025-12-23 16:15:30]   2025: 10,000 observations
+[2025-12-23 16:15:30]   Total Crustacea: 91,571
+[2025-12-23 16:15:44] 
+Taxon: Myriapoda
+[2025-12-23 16:15:45]   2010: 1 observations
+[2025-12-23 16:15:47]   2013: 1 observations
+[2025-12-23 16:15:47]   2014: 1 observations
+[2025-12-23 16:15:48]   2016: 1 observations
+[2025-12-23 16:15:49]   2017: 6 observations
+[2025-12-23 16:15:50]   2018: 14 observations
+[2025-12-23 16:15:51]   2019: 26 observations
+[2025-12-23 16:15:52]   2020: 53 observations
+[2025-12-23 16:15:53]   2021: 61 observations
+[2025-12-23 16:15:54]   2022: 75 observations
+[2025-12-23 16:15:56]   2023: 88 observations
+[2025-12-23 16:15:57]   2024: 93 observations
+[2025-12-23 16:15:59]   2025: 144 observations
+[2025-12-23 16:15:59]   Total Myriapoda: 564
+[2025-12-23 16:16:13] 
+Taxon: Cnidaria
+[2025-12-23 16:16:19]   2019: 2 observations
+[2025-12-23 16:16:20]   2021: 5 observations
+[2025-12-23 16:16:21]   2023: 12 observations
+[2025-12-23 16:16:22]   2024: 25 observations
+[2025-12-23 16:16:22]   2025: 13 observations
+[2025-12-23 16:16:22]   Total Cnidaria: 57
+[2025-12-23 16:16:36] 
+=== GBIF Collection ===
+[2025-12-23 16:16:36] 
+Collecting GBIF: Aves
+[2025-12-23 16:16:37]   GBIF Aves: 9,650,842 available
+[2025-12-23 16:17:03]   GBIF Aves: 3,000 collected
+[2025-12-23 16:17:30]   GBIF Aves: 6,000 collected
+[2025-12-23 16:17:56]   GBIF Aves: 9,000 collected
+[2025-12-23 16:22:34]   GBIF Aves: 12,000 collected
+[2025-12-23 16:30:06]   GBIF Aves: 15,000 collected
+[2025-12-23 16:38:09]   GBIF Aves: 18,000 collected
+[2025-12-23 16:46:29]   GBIF Aves: 21,000 collected
+[2025-12-23 16:52:25]   GBIF Aves: 24,000 collected
+[2025-12-23 16:58:00]   GBIF Aves: 27,000 collected
+[2025-12-23 17:03:22]   GBIF Aves: 30,000 collected
+[2025-12-23 17:08:41]   GBIF Aves: 33,000 collected
+[2025-12-23 17:13:54]   GBIF Aves: 36,000 collected
+[2025-12-23 17:19:24]   GBIF Aves: 39,000 collected
+[2025-12-23 17:24:44]   GBIF Aves: 42,000 collected
+[2025-12-23 17:29:46]   GBIF Aves: 45,000 collected
+[2025-12-23 17:35:10]   GBIF Aves: 48,000 collected
+[2025-12-23 17:40:34]   GBIF Aves: 51,000 collected
+[2025-12-23 17:46:01]   GBIF Aves: 54,000 collected
+[2025-12-23 17:51:23]   GBIF Aves: 57,000 collected
+[2025-12-23 17:56:45]   GBIF Aves: 60,000 collected
+[2025-12-23 18:02:11]   GBIF Aves: 63,000 collected
+[2025-12-23 18:07:39]   GBIF Aves: 66,000 collected
+[2025-12-23 18:13:09]   GBIF Aves: 69,000 collected
+[2025-12-23 18:18:44]   GBIF Aves: 72,000 collected
+[2025-12-23 18:24:16]   GBIF Aves: 75,000 collected
+[2025-12-23 18:29:44]   GBIF Aves: 78,000 collected
+[2025-12-23 18:35:18]   GBIF Aves: 81,000 collected
+[2025-12-23 18:40:45]   GBIF Aves: 84,000 collected
+[2025-12-23 18:46:09]   GBIF Aves: 87,000 collected
+[2025-12-23 18:51:35]   GBIF Aves: 90,000 collected
+[2025-12-23 18:56:59]   GBIF Aves: 93,000 collected
+[2025-12-23 19:02:37]   GBIF Aves: 96,000 collected
