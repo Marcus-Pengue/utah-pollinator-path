@@ -6,6 +6,7 @@ import BloomTracker from './BloomTracker';
 import AchievementBadges from './AchievementBadges';
 import RebateFinder from './RebateFinder';
 import GardenLayoutPlanner from './GardenLayoutPlanner';
+import AcademicAnalytics from './AcademicAnalytics';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
@@ -67,7 +68,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   onEditGarden,
   onStartCapture
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates' | 'layout'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates' | 'layout' | 'analytics'>('overview');
 
   if (!isOpen) return null;
 
@@ -331,6 +332,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             { id: 'blooms', label: 'Blooms', icon: Flower2 },
             { id: 'rebates', label: 'Rebates', icon: DollarSign },
             { id: 'layout', label: 'Layout', icon: Grid },
+            { id: 'analytics', label: 'Analytics', icon: BarChart3 },
           ].map(tab => (
             <button
               key={tab.id}
@@ -715,6 +717,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
           {activeSection === 'layout' && (
             <GardenLayoutPlanner existingPlants={gardenData?.plants} />
           )}
+          {/* Analytics Section */}
+          {activeSection === 'analytics' && (
+            <AcademicAnalytics
+              observations={[]}
+            />
+          )}
+
 
 
         </div>
