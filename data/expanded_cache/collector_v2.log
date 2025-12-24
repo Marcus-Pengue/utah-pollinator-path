@@ -1,2 +1,32 @@
-[Tue Dec 23 20:56:34 MST 2025] Starting improved GBIF collector...
-[Tue Dec 23 20:56:34 MST 2025] Collector started with PID 60971
+Loaded 574,264 existing records
+
+Fetching GBIF Aves...
+  Aves: 5,064,931 total, targeting 100,000 records
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 0 collected
+    Aves: 3,000 collected
+    Aves: 6,000 collected
+    Aves: 9,000 collected
+    Aves: 12,000 collected
+    Error at offset 18300: Response payload is not completed: <TransferEncodingError: 400, message='Not enough data to satisfy transfer length header.'>. ConnectionResetError(54, 'Connection reset by peer') (1/5)
+    Error at offset 18900: Response payload is not completed: <TransferEncodingError: 400, message='Not enough data to satisfy transfer length header.'>. ConnectionResetError(54, 'Connection reset by peer') (1/5)
+    Error at offset 19500: Response payload is not completed: <TransferEncodingError: 400, message='Not enough data to satisfy transfer length header.'>. ConnectionResetError(54, 'Connection reset by peer') (1/5)
+    Error at offset 20100: timeout (1/5)
+    Aves: 15,000 collected
+    Aves: 18,000 collected
+    Aves: 21,000 collected
+    Aves: 24,000 collected

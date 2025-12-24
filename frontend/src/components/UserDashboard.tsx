@@ -4,10 +4,11 @@ import NeighborDiscovery from './NeighborDiscovery';
 import GardenPlanner from './GardenPlanner';
 import BloomTracker from './BloomTracker';
 import AchievementBadges from './AchievementBadges';
+import RebateFinder from './RebateFinder';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
-  BarChart3, Target, Zap, Crown, Flower2} from 'lucide-react';
+  BarChart3, Target, Zap, Crown, Flower2, DollarSign} from 'lucide-react';
 import VerificationSystem, { VerificationStatus, PlantEntry } from './VerificationSystem';
 import NeighborRecruitment from './NeighborRecruitment';
 
@@ -65,7 +66,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   onEditGarden,
   onStartCapture
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates'>('overview');
 
   if (!isOpen) return null;
 
@@ -327,6 +328,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             { id: 'achievements', label: 'Awards', icon: Award },
             { id: 'planner', label: 'Planner', icon: Leaf },
             { id: 'blooms', label: 'Blooms', icon: Flower2 },
+            { id: 'rebates', label: 'Rebates', icon: DollarSign },
           ].map(tab => (
             <button
               key={tab.id}
@@ -697,6 +699,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
           {activeSection === 'blooms' && (
             <BloomTracker
               onPlantSelect={(plant) => console.log('Selected plant:', plant)}
+            />
+          )}
+
+          {/* Rebates Section */}
+          {activeSection === 'rebates' && (
+            <RebateFinder
+              userCity={undefined}
+              gardenSize={gardenData?.size}
             />
           )}
 
