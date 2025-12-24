@@ -5,10 +5,11 @@ import GardenPlanner from './GardenPlanner';
 import BloomTracker from './BloomTracker';
 import AchievementBadges from './AchievementBadges';
 import RebateFinder from './RebateFinder';
+import GardenLayoutPlanner from './GardenLayoutPlanner';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
-  BarChart3, Target, Zap, Crown, Flower2, DollarSign} from 'lucide-react';
+  BarChart3, Target, Zap, Crown, Flower2, DollarSign, Grid} from 'lucide-react';
 import VerificationSystem, { VerificationStatus, PlantEntry } from './VerificationSystem';
 import NeighborRecruitment from './NeighborRecruitment';
 
@@ -66,7 +67,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   onEditGarden,
   onStartCapture
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates' | 'layout'>('overview');
 
   if (!isOpen) return null;
 
@@ -329,6 +330,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             { id: 'planner', label: 'Planner', icon: Leaf },
             { id: 'blooms', label: 'Blooms', icon: Flower2 },
             { id: 'rebates', label: 'Rebates', icon: DollarSign },
+            { id: 'layout', label: 'Layout', icon: Grid },
           ].map(tab => (
             <button
               key={tab.id}
@@ -709,6 +711,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               gardenSize={gardenData?.size}
             />
           )}
+          {/* Layout Section */}
+          {activeSection === 'layout' && (
+            <GardenLayoutPlanner existingPlants={gardenData?.plants} />
+          )}
+
 
         </div>
       </div>
