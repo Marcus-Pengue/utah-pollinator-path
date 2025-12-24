@@ -1,480 +1,548 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { Flower2, Trees, Droplets, Sun, Cloud, Move, Trash2, RotateCcw, Download, ZoomIn, ZoomOut, Grid, Info, Shrub } from 'lucide-react';
+// GardenLayoutPlanner.tsx - Interactive drag-drop garden planner
+// Place in: frontend/src/components/GardenLayoutPlanner.tsx
 
-interface PlantType {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  width: number; // feet
-  height: number; // feet
-  spacing: number; // feet between plants
-  sunNeeds: 'full' | 'partial' | 'shade';
-  waterNeeds: 'low' | 'medium' | 'high';
-  category: 'flower' | 'shrub' | 'tree' | 'groundcover';
-  blooms?: string;
-}
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { PLANTS, Plant, getPlantById } from '../config/plants';
+import { useGarden, PlacedPlant, GardenZone, GardenLayout } from '../context/GardenContext';
+import { PlantDetailModal } from './PlantDetailModal';
 
-interface PlacedPlant {
-  id: string;
-  plantType: PlantType;
-  x: number; // grid position
-  y: number;
-  rotation: number;
-}
+// Tool modes
+type ToolMode = 'select' | 'plant' | 'zone' | 'path' | 'eraser';
 
-interface GardenZone {
-  id: string;
-  type: 'full-sun' | 'partial-shade' | 'full-shade' | 'wet' | 'dry';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+// Sidebar panel states
+type SidePanel = 'plants' | 'zones' | 'saved' | null;
 
+// Grid constants
+const GRID_SIZE = 10; // 10px per grid cell
+const SCALE_FACTOR = 2; // 2px per foot
+
+// Props interface
 interface GardenLayoutPlannerProps {
-  onSave?: (layout: any) => void;
   existingPlants?: string[];
 }
 
-const PLANT_PALETTE: PlantType[] = [
-  // Flowers
-  { id: 'desert-marigold', name: 'Desert Marigold', icon: '🌼', color: '#fbbf24', width: 1.5, height: 1, spacing: 1.5, sunNeeds: 'full', waterNeeds: 'low', category: 'flower', blooms: 'Mar-Nov' },
-  { id: 'blue-flax', name: 'Blue Flax', icon: '💙', color: '#3b82f6', width: 1, height: 1.5, spacing: 1, sunNeeds: 'full', waterNeeds: 'low', category: 'flower', blooms: 'May-Jul' },
-  { id: 'penstemon', name: 'Penstemon', icon: '🌺', color: '#ec4899', width: 1.5, height: 2, spacing: 1.5, sunNeeds: 'full', waterNeeds: 'low', category: 'flower', blooms: 'May-Jul' },
-  { id: 'blanket-flower', name: 'Blanket Flower', icon: '🔴', color: '#ef4444', width: 1.5, height: 1.5, spacing: 1, sunNeeds: 'full', waterNeeds: 'low', category: 'flower', blooms: 'Jun-Sep' },
-  { id: 'black-eyed-susan', name: 'Black-eyed Susan', icon: '🌻', color: '#f59e0b', width: 2, height: 2, spacing: 1.5, sunNeeds: 'full', waterNeeds: 'medium', category: 'flower', blooms: 'Jun-Oct' },
-  { id: 'coneflower', name: 'Purple Coneflower', icon: '💜', color: '#a855f7', width: 2, height: 3, spacing: 1.5, sunNeeds: 'full', waterNeeds: 'low', category: 'flower', blooms: 'Jun-Aug' },
-  { id: 'bee-balm', name: 'Bee Balm', icon: '🔮', color: '#dc2626', width: 2, height: 3, spacing: 2, sunNeeds: 'full', waterNeeds: 'medium', category: 'flower', blooms: 'Jul-Sep' },
-  { id: 'goldenrod', name: 'Goldenrod', icon: '💛', color: '#eab308', width: 2, height: 3, spacing: 2, sunNeeds: 'full', waterNeeds: 'low', category: 'flower', blooms: 'Aug-Oct' },
-  
-  // Shrubs
-  { id: 'rabbitbrush', name: 'Rabbitbrush', icon: '🌿', color: '#84cc16', width: 4, height: 4, spacing: 4, sunNeeds: 'full', waterNeeds: 'low', category: 'shrub', blooms: 'Aug-Oct' },
-  { id: 'apache-plume', name: 'Apache Plume', icon: '🤍', color: '#f5f5f4', width: 4, height: 5, spacing: 4, sunNeeds: 'full', waterNeeds: 'low', category: 'shrub', blooms: 'May-Oct' },
-  { id: 'fernbush', name: 'Fernbush', icon: '🌲', color: '#65a30d', width: 4, height: 5, spacing: 4, sunNeeds: 'partial', waterNeeds: 'low', category: 'shrub', blooms: 'Jun-Aug' },
-  { id: 'red-twig-dogwood', name: 'Red Twig Dogwood', icon: '🔴', color: '#b91c1c', width: 6, height: 8, spacing: 5, sunNeeds: 'partial', waterNeeds: 'medium', category: 'shrub' },
-  
-  // Groundcovers
-  { id: 'creeping-thyme', name: 'Creeping Thyme', icon: '🌱', color: '#86efac', width: 1, height: 0.25, spacing: 1, sunNeeds: 'full', waterNeeds: 'low', category: 'groundcover', blooms: 'Jun-Jul' },
-  { id: 'sedum', name: 'Sedum', icon: '🪴', color: '#22c55e', width: 1.5, height: 0.5, spacing: 1, sunNeeds: 'full', waterNeeds: 'low', category: 'groundcover', blooms: 'Aug-Sep' },
-  
-  // Trees
-  { id: 'desert-willow', name: 'Desert Willow', icon: '🌳', color: '#16a34a', width: 15, height: 25, spacing: 15, sunNeeds: 'full', waterNeeds: 'low', category: 'tree', blooms: 'May-Sep' },
-  { id: 'serviceberry', name: 'Serviceberry', icon: '🌳', color: '#15803d', width: 12, height: 15, spacing: 10, sunNeeds: 'partial', waterNeeds: 'medium', category: 'tree', blooms: 'Apr-May' },
-];
+export function GardenLayoutPlanner(props: GardenLayoutPlannerProps = {}) {
+  const { existingPlants = [] } = props;
+  // Context
+  const { 
+    currentLayout, 
+    setCurrentLayout, 
+    savedLayouts, 
+    saveLayout, 
+    deleteLayout,
+    pendingGeneratedLayout,
+    setPendingGeneratedLayout,
+    navigateToPlanner,
+    setNavigateToPlanner,
+    convertGeneratedToPlanner
+  } = useGarden();
 
-const ZONE_COLORS = {
-  'full-sun': { bg: '#fef3c7', border: '#f59e0b', label: 'Full Sun' },
-  'partial-shade': { bg: '#dbeafe', border: '#3b82f6', label: 'Partial Shade' },
-  'full-shade': { bg: '#e5e7eb', border: '#6b7280', label: 'Full Shade' },
-  'wet': { bg: '#cffafe', border: '#06b6d4', label: 'Wet Area' },
-  'dry': { bg: '#fef2f2', border: '#ef4444', label: 'Dry Area' },
-};
-
-const GardenLayoutPlanner: React.FC<GardenLayoutPlannerProps> = ({ onSave, existingPlants }) => {
-  const [gardenWidth, setGardenWidth] = useState(20); // feet
-  const [gardenHeight, setGardenHeight] = useState(15); // feet
-  const [cellSize, setCellSize] = useState(30); // pixels per foot
-  const [placedPlants, setPlacedPlants] = useState<PlacedPlant[]>([]);
-  const [zones, setZones] = useState<GardenZone[]>([]);
-  const [selectedPlant, setSelectedPlant] = useState<PlantType | null>(null);
-  const [selectedPlaced, setSelectedPlaced] = useState<string | null>(null);
-  const [showGrid, setShowGrid] = useState(true);
-  const [showSpacing, setShowSpacing] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<string>('flower');
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Canvas ref
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  const filteredPlants = PLANT_PALETTE.filter(p => p.category === activeCategory);
+  // Tool state
+  const [toolMode, setToolMode] = useState<ToolMode>('select');
+  const [sidePanel, setSidePanel] = useState<SidePanel>('plants');
+  const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    if (!canvasRef.current || !selectedPlant) return;
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / cellSize);
-    const y = Math.floor((e.clientY - rect.top) / cellSize);
-    
-    if (x >= 0 && x < gardenWidth && y >= 0 && y < gardenHeight) {
-      const newPlant: PlacedPlant = {
-        id: `plant-${Date.now()}`,
-        plantType: selectedPlant,
-        x,
-        y,
-        rotation: 0
-      };
-      setPlacedPlants(prev => [...prev, newPlant]);
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // Plant detail modal
+  const [modalPlant, setModalPlant] = useState<Plant | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Plant search
+  const [plantSearch, setPlantSearch] = useState('');
+
+  // Initialize with pending generated layout if coming from generator
+  useEffect(() => {
+    if (navigateToPlanner && pendingGeneratedLayout) {
+      const layout = convertGeneratedToPlanner(pendingGeneratedLayout);
+      setCurrentLayout(layout);
+      setPendingGeneratedLayout(null);
+      setNavigateToPlanner(false);
     }
-  }, [selectedPlant, cellSize, gardenWidth, gardenHeight]);
+  }, [navigateToPlanner, pendingGeneratedLayout, convertGeneratedToPlanner, setCurrentLayout, setPendingGeneratedLayout, setNavigateToPlanner]);
 
-  const handlePlantDragStart = (e: React.MouseEvent, plantId: string) => {
-    e.stopPropagation();
-    setSelectedPlaced(plantId);
-    setIsDragging(true);
-    const plant = placedPlants.find(p => p.id === plantId);
-    if (plant && canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      setDragOffset({
-        x: e.clientX - rect.left - plant.x * cellSize,
-        y: e.clientY - rect.top - plant.y * cellSize
-      });
-    }
-  };
-
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging || !selectedPlaced || !canvasRef.current) return;
-    
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left - dragOffset.x) / cellSize);
-    const y = Math.floor((e.clientY - rect.top - dragOffset.y) / cellSize);
-    
-    setPlacedPlants(prev => prev.map(p => 
-      p.id === selectedPlaced ? { ...p, x: Math.max(0, Math.min(gardenWidth - 1, x)), y: Math.max(0, Math.min(gardenHeight - 1, y)) } : p
-    ));
-  }, [isDragging, selectedPlaced, cellSize, gardenWidth, gardenHeight, dragOffset]);
-
-  const handleCanvasMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const deletePlant = (id: string) => {
-    setPlacedPlants(prev => prev.filter(p => p.id !== id));
-    setSelectedPlaced(null);
-  };
-
-  const clearAll = () => {
-    if (window.confirm('Clear all plants from the garden?')) {
-      setPlacedPlants([]);
-      setZones([]);
-    }
-  };
-
-  const exportLayout = () => {
-    const layout = {
-      dimensions: { width: gardenWidth, height: gardenHeight },
-      plants: placedPlants.map(p => ({
-        name: p.plantType.name,
-        x: p.x,
-        y: p.y,
-        spacing: p.plantType.spacing
-      })),
-      zones,
-      plantList: placedPlants.reduce((acc, p) => {
-        const existing = acc.find(a => a.name === p.plantType.name);
-        if (existing) existing.count++;
-        else acc.push({ name: p.plantType.name, count: 1 });
-        return acc;
-      }, [] as { name: string; count: number }[])
+  // Create new blank layout
+  const createNewLayout = useCallback(() => {
+    const newLayout: GardenLayout = {
+      id: `layout-${Date.now()}`,
+      name: 'New Garden Layout',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      dimensions: { width: 50, height: 40 },
+      sunExposure: 'full',
+      zones: [],
+      placedPlants: [],
+      generatedBy: 'manual',
     };
+    setCurrentLayout(newLayout);
+  }, [setCurrentLayout]);
+
+  // Handle canvas click for placing plants
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!currentLayout || !canvasRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (toolMode === 'plant' && selectedPlantId) {
+      const plant = getPlantById(selectedPlantId);
+      if (!plant) return;
+
+      const newPlant: PlacedPlant = {
+        id: `plant-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        plantId: selectedPlantId,
+        x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+        y: Math.round(y / GRID_SIZE) * GRID_SIZE,
+        quantity: 1,
+      };
+
+      setCurrentLayout({
+        ...currentLayout,
+        placedPlants: [...currentLayout.placedPlants, newPlant],
+        updatedAt: new Date(),
+      });
+    } else if (toolMode === 'eraser') {
+      // Find and remove plant at click location
+      const clickedPlant = currentLayout.placedPlants.find((p: PlacedPlant) => {
+        const plant = getPlantById(p.plantId);
+        if (!plant) return false;
+        const size = Math.max(plant.widthMax * 12, 12) * SCALE_FACTOR / 2;
+        return Math.abs(p.x - x) < size && Math.abs(p.y - y) < size;
+      });
+
+      if (clickedPlant) {
+        setCurrentLayout({
+          ...currentLayout,
+          placedPlants: currentLayout.placedPlants.filter((p: PlacedPlant) => p.id !== clickedPlant.id),
+          updatedAt: new Date(),
+        });
+      }
+    }
+  }, [currentLayout, toolMode, selectedPlantId, setCurrentLayout]);
+
+  // Handle plant drag start
+  const handlePlantDragStart = (e: React.MouseEvent, plantPlacement: PlacedPlant) => {
+    if (toolMode !== 'select') return;
+    e.stopPropagation();
     
-    const text = `GARDEN LAYOUT PLAN
-Generated: ${new Date().toLocaleDateString()}
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
 
-DIMENSIONS: ${gardenWidth}' x ${gardenHeight}' (${gardenWidth * gardenHeight} sq ft)
-
-PLANT LIST:
-${layout.plantList.map(p => `  - ${p.name}: ${p.count}`).join('\n')}
-
-TOTAL PLANTS: ${placedPlants.length}
-
-PLACEMENT (x, y in feet from top-left):
-${layout.plants.map(p => `  - ${p.name} at (${p.x}', ${p.y}')`).join('\n')}
-`;
-    
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'garden-layout.txt';
-    a.click();
-    URL.revokeObjectURL(url);
+    setIsDragging(true);
+    setSelectedItemId(plantPlacement.id);
+    setDragOffset({
+      x: e.clientX - rect.left - plantPlacement.x,
+      y: e.clientY - rect.top - plantPlacement.y,
+    });
   };
 
-  const plantCounts = placedPlants.reduce((acc, p) => {
-    acc[p.plantType.name] = (acc[p.plantType.name] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  // Handle mouse move for dragging
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging || !selectedItemId || !currentLayout || !canvasRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const newX = Math.round((e.clientX - rect.left - dragOffset.x) / GRID_SIZE) * GRID_SIZE;
+    const newY = Math.round((e.clientY - rect.top - dragOffset.y) / GRID_SIZE) * GRID_SIZE;
+
+    // Clamp to canvas bounds
+    const clampedX = Math.max(0, Math.min(newX, currentLayout.dimensions.width * SCALE_FACTOR));
+    const clampedY = Math.max(0, Math.min(newY, currentLayout.dimensions.height * SCALE_FACTOR));
+
+    setCurrentLayout({
+      ...currentLayout,
+      placedPlants: currentLayout.placedPlants.map((p: PlacedPlant) => 
+        p.id === selectedItemId ? { ...p, x: clampedX, y: clampedY } : p
+      ),
+    });
+  }, [isDragging, selectedItemId, currentLayout, dragOffset, setCurrentLayout]);
+
+  // Handle mouse up
+  const handleMouseUp = useCallback(() => {
+    if (isDragging && currentLayout) {
+      setIsDragging(false);
+      // Auto-save after drag
+      saveLayout(currentLayout);
+    }
+  }, [isDragging, currentLayout, saveLayout]);
+
+  // Filter plants for sidebar
+  const filteredPlants = PLANTS.filter((p: Plant) => 
+    p.commonName.toLowerCase().includes(plantSearch.toLowerCase()) ||
+    p.scientificName.toLowerCase().includes(plantSearch.toLowerCase())
+  );
+
+  // Plant categories for grouping
+  const plantCategories = Array.from(new Set(PLANTS.map((p: Plant) => p.category)));
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#fefefe' }}>
-      {/* Header */}
-      <div style={{ padding: 12, background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)', color: 'white' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Grid size={20} />
-            <h3 style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>Garden Layout Planner</h3>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setCellSize(s => Math.min(50, s + 5))} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 4, padding: '4px 8px', color: 'white', cursor: 'pointer' }}>
-              <ZoomIn size={16} />
-            </button>
-            <button onClick={() => setCellSize(s => Math.max(15, s - 5))} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 4, padding: '4px 8px', color: 'white', cursor: 'pointer' }}>
-              <ZoomOut size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex h-full bg-gray-100">
       {/* Toolbar */}
-      <div style={{ padding: 8, borderBottom: '1px solid #e5e7eb', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontSize: 11, color: '#666' }}>Size:</span>
-          <input type="number" value={gardenWidth} onChange={e => setGardenWidth(Number(e.target.value))} style={{ width: 40, padding: '4px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
-          <span style={{ fontSize: 11 }}>x</span>
-          <input type="number" value={gardenHeight} onChange={e => setGardenHeight(Number(e.target.value))} style={{ width: 40, padding: '4px', borderRadius: 4, border: '1px solid #ddd', fontSize: 12 }} />
-          <span style={{ fontSize: 11, color: '#666' }}>ft</span>
-        </div>
-        <div style={{ height: 20, width: 1, backgroundColor: '#ddd' }} />
-        <button onClick={() => setShowGrid(!showGrid)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: showGrid ? '#22c55e' : '#f3f4f6', color: showGrid ? 'white' : '#666', fontSize: 11, cursor: 'pointer' }}>Grid</button>
-        <button onClick={() => setShowSpacing(!showSpacing)} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: showSpacing ? '#22c55e' : '#f3f4f6', color: showSpacing ? 'white' : '#666', fontSize: 11, cursor: 'pointer' }}>Spacing</button>
-        <div style={{ height: 20, width: 1, backgroundColor: '#ddd' }} />
-        <button onClick={clearAll} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <RotateCcw size={12} /> Clear
+      <div className="w-16 bg-gray-800 text-white flex flex-col items-center py-4 gap-2">
+        <button
+          onClick={() => setToolMode('select')}
+          className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl transition-colors ${
+            toolMode === 'select' ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+          }`}
+          title="Select & Move"
+        >
+          👆
         </button>
-        <button onClick={exportLayout} style={{ padding: '4px 8px', borderRadius: 4, border: 'none', backgroundColor: '#dbeafe', color: '#2563eb', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Download size={12} /> Export
+        <button
+          onClick={() => { setToolMode('plant'); setSidePanel('plants'); }}
+          className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl transition-colors ${
+            toolMode === 'plant' ? 'bg-green-600' : 'bg-gray-700 hover:bg-gray-600'
+          }`}
+          title="Add Plant"
+        >
+          🌱
+        </button>
+        <button
+          onClick={() => setToolMode('eraser')}
+          className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl transition-colors ${
+            toolMode === 'eraser' ? 'bg-red-600' : 'bg-gray-700 hover:bg-gray-600'
+          }`}
+          title="Eraser"
+        >
+          🗑️
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={() => setSidePanel(sidePanel === 'saved' ? null : 'saved')}
+          className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl transition-colors ${
+            sidePanel === 'saved' ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+          }`}
+          title="Saved Layouts"
+        >
+          📁
+        </button>
+        <button
+          onClick={createNewLayout}
+          className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded-lg flex items-center justify-center text-xl"
+          title="New Layout"
+        >
+          ➕
         </button>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Plant Palette */}
-        <div style={{ width: 140, borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
-          {/* Categories */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
-            {[
-              { id: 'flower', icon: '🌸', label: 'Flowers' },
-              { id: 'shrub', icon: '🌿', label: 'Shrubs' },
-              { id: 'groundcover', icon: '🌱', label: 'Ground' },
-              { id: 'tree', icon: '🌳', label: 'Trees' },
-            ].map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                style={{
-                  flex: 1,
-                  padding: '6px 2px',
-                  border: 'none',
-                  backgroundColor: activeCategory === cat.id ? '#f0fdf4' : 'white',
-                  borderBottom: activeCategory === cat.id ? '2px solid #22c55e' : '2px solid transparent',
-                  cursor: 'pointer',
-                  fontSize: 14
-                }}
-                title={cat.label}
-              >
-                {cat.icon}
-              </button>
-            ))}
-          </div>
-          
-          {/* Plants */}
-          <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {filteredPlants.map(plant => (
-                <div
-                  key={plant.id}
-                  onClick={() => setSelectedPlant(selectedPlant?.id === plant.id ? null : plant)}
-                  style={{
-                    padding: 8,
-                    borderRadius: 8,
-                    border: `2px solid ${selectedPlant?.id === plant.id ? '#22c55e' : '#e5e7eb'}`,
-                    backgroundColor: selectedPlant?.id === plant.id ? '#f0fdf4' : 'white',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 18 }}>{plant.icon}</span>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.2 }}>{plant.name}</div>
-                      <div style={{ fontSize: 9, color: '#666' }}>{plant.width}'×{plant.height}'</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Selected Plant Info */}
-          {selectedPlant && (
-            <div style={{ padding: 8, borderTop: '1px solid #e5e7eb', backgroundColor: '#f9fafb', fontSize: 10 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{selectedPlant.name}</div>
-              <div>☀️ {selectedPlant.sunNeeds}</div>
-              <div>💧 {selectedPlant.waterNeeds}</div>
-              <div>↔️ {selectedPlant.spacing}' spacing</div>
-              {selectedPlant.blooms && <div>🌸 {selectedPlant.blooms}</div>}
-              <div style={{ marginTop: 6, color: '#22c55e', fontWeight: 600 }}>Click on garden to place</div>
-            </div>
-          )}
-        </div>
-
-        {/* Canvas Area */}
-        <div style={{ flex: 1, overflow: 'auto', padding: 16, backgroundColor: '#f9fafb' }}>
-          <div
-            ref={canvasRef}
-            onClick={handleCanvasClick}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
-            onMouseLeave={handleCanvasMouseUp}
-            style={{
-              width: gardenWidth * cellSize,
-              height: gardenHeight * cellSize,
-              backgroundColor: '#c7ddb5',
-              border: '3px solid #7c9c6b',
-              borderRadius: 4,
-              position: 'relative',
-              backgroundImage: showGrid ? `
-                linear-gradient(to right, rgba(0,0,0,0.1) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(0,0,0,0.1) 1px, transparent 1px)
-              ` : 'none',
-              backgroundSize: `${cellSize}px ${cellSize}px`,
-              cursor: selectedPlant ? 'crosshair' : 'default'
-            }}
-          >
-            {/* Zones */}
-            {zones.map(zone => {
-              const zoneStyle = ZONE_COLORS[zone.type];
-              return (
-                <div
-                  key={zone.id}
-                  style={{
-                    position: 'absolute',
-                    left: zone.x * cellSize,
-                    top: zone.y * cellSize,
-                    width: zone.width * cellSize,
-                    height: zone.height * cellSize,
-                    backgroundColor: zoneStyle.bg,
-                    border: `2px dashed ${zoneStyle.border}`,
-                    borderRadius: 4,
-                    opacity: 0.7
-                  }}
+      {/* Side Panel */}
+      {sidePanel && (
+        <div className="w-72 bg-white border-r border-gray-200 flex flex-col">
+          {sidePanel === 'plants' && (
+            <>
+              <div className="p-4 border-b">
+                <h3 className="font-semibold text-gray-800 mb-2">🌱 Plants</h3>
+                <input
+                  type="text"
+                  value={plantSearch}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPlantSearch(e.target.value)}
+                  placeholder="Search plants..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
-              );
-            })}
-
-            {/* Placed Plants */}
-            {placedPlants.map(plant => {
-              const size = Math.max(plant.plantType.width, plant.plantType.height) * cellSize * 0.8;
-              const isSelected = selectedPlaced === plant.id;
-              
-              return (
-                <div
-                  key={plant.id}
-                  onMouseDown={(e) => handlePlantDragStart(e, plant.id)}
-                  onClick={(e) => { e.stopPropagation(); setSelectedPlaced(isSelected ? null : plant.id); }}
-                  style={{
-                    position: 'absolute',
-                    left: plant.x * cellSize + (cellSize - size) / 2,
-                    top: plant.y * cellSize + (cellSize - size) / 2,
-                    width: size,
-                    height: size,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'move',
-                    zIndex: isSelected ? 100 : 10,
-                    transform: `rotate(${plant.rotation}deg)`
-                  }}
-                >
-                  {/* Spacing circle */}
-                  {showSpacing && (
-                    <div style={{
-                      position: 'absolute',
-                      width: plant.plantType.spacing * cellSize * 2,
-                      height: plant.plantType.spacing * cellSize * 2,
-                      borderRadius: '50%',
-                      border: `2px dashed ${isSelected ? '#22c55e' : 'rgba(0,0,0,0.2)'}`,
-                      backgroundColor: isSelected ? 'rgba(34,197,94,0.1)' : 'transparent'
-                    }} />
-                  )}
-                  
-                  {/* Plant icon */}
-                  <div style={{
-                    width: size,
-                    height: size,
-                    borderRadius: '50%',
-                    backgroundColor: plant.plantType.color,
-                    border: `3px solid ${isSelected ? '#22c55e' : 'rgba(0,0,0,0.3)'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: size * 0.5,
-                    boxShadow: isSelected ? '0 0 0 3px rgba(34,197,94,0.3)' : '0 2px 4px rgba(0,0,0,0.2)'
-                  }}>
-                    {plant.plantType.icon}
-                  </div>
-                  
-                  {/* Delete button */}
-                  {isSelected && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deletePlant(plant.id); }}
-                      style={{
-                        position: 'absolute',
-                        top: -8,
-                        right: -8,
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        border: 'none',
-                        backgroundColor: '#ef4444',
-                        color: 'white',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* Scale indicator */}
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: cellSize * 5, height: 4, backgroundColor: '#666', borderRadius: 2 }} />
-            <span style={{ fontSize: 11, color: '#666' }}>5 feet</span>
-          </div>
-        </div>
-
-        {/* Plant List */}
-        <div style={{ width: 160, borderLeft: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: 8, borderBottom: '1px solid #e5e7eb', fontWeight: 600, fontSize: 12 }}>
-            Plant List ({placedPlants.length})
-          </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: 8 }}>
-            {Object.entries(plantCounts).length === 0 ? (
-              <div style={{ fontSize: 11, color: '#666', textAlign: 'center', padding: 20 }}>
-                No plants yet.<br />Select a plant and click to place.
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {Object.entries(plantCounts).map(([name, count]) => {
-                  const plant = PLANT_PALETTE.find(p => p.name === name);
+              <div className="flex-1 overflow-y-auto p-2">
+                {plantCategories.map((category: string) => {
+                  const categoryPlants = filteredPlants.filter((p: Plant) => p.category === category);
+                  if (categoryPlants.length === 0) return null;
                   return (
-                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, backgroundColor: '#f9fafb', borderRadius: 6, fontSize: 11 }}>
-                      <span>{plant?.icon}</span>
-                      <span style={{ flex: 1 }}>{name}</span>
-                      <span style={{ fontWeight: 600, color: '#22c55e' }}>×{count}</span>
+                    <div key={category} className="mb-4">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase px-2 mb-2">
+                        {category}
+                      </h4>
+                      {categoryPlants.slice(0, 8).map((plant: Plant) => (
+                        <button
+                          key={plant.id}
+                          onClick={() => { 
+                            setSelectedPlantId(plant.id); 
+                            setToolMode('plant'); 
+                          }}
+                          onDoubleClick={() => {
+                            setModalPlant(plant);
+                            setIsModalOpen(true);
+                          }}
+                          className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
+                            selectedPlantId === plant.id 
+                              ? 'bg-green-100 border border-green-400' 
+                              : 'hover:bg-gray-100'
+                          }`}
+                        >
+                          <span className="text-xl">{plant.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800 truncate">
+                              {plant.commonName}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              💧{plant.localscapesZone} • {plant.bloomMonths[0]}-{plant.bloomMonths[plant.bloomMonths.length-1]}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   );
                 })}
               </div>
+              <div className="p-3 border-t bg-gray-50 text-xs text-gray-500">
+                💡 Click to select, double-click for details
+              </div>
+            </>
+          )}
+
+          {sidePanel === 'saved' && (
+            <>
+              <div className="p-4 border-b">
+                <h3 className="font-semibold text-gray-800">📁 Saved Layouts</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                {savedLayouts.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <div className="text-3xl mb-2">📋</div>
+                    <p className="text-sm">No saved layouts yet</p>
+                  </div>
+                ) : (
+                  savedLayouts.map((layout: GardenLayout) => (
+                    <div
+                      key={layout.id}
+                      className={`p-3 rounded-lg mb-2 cursor-pointer transition-colors ${
+                        currentLayout?.id === layout.id
+                          ? 'bg-green-100 border border-green-400'
+                          : 'bg-gray-50 hover:bg-gray-100'
+                      }`}
+                      onClick={() => setCurrentLayout(layout)}
+                    >
+                      <div className="font-medium text-gray-800 text-sm">{layout.name}</div>
+                      <div className="text-xs text-gray-500 flex justify-between mt-1">
+                        <span>{layout.placedPlants.length} plants</span>
+                        <span>{layout.generatedBy === 'ai' ? '🤖 AI' : '✋ Manual'}</span>
+                      </div>
+                      <button
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); deleteLayout(layout.id); }}
+                        className="text-xs text-red-500 hover:text-red-700 mt-1"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Main Canvas Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b p-4 flex items-center justify-between">
+          <div>
+            {currentLayout ? (
+              <input
+                type="text"
+                value={currentLayout.name}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentLayout({ ...currentLayout, name: e.target.value })}
+                className="text-lg font-semibold text-gray-800 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-green-500 focus:outline-none px-1"
+              />
+            ) : (
+              <h2 className="text-lg font-semibold text-gray-400">No layout selected</h2>
+            )}
+            {currentLayout?.generatedBy === 'ai' && (
+              <span className="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">
+                🤖 AI Generated
+              </span>
             )}
           </div>
-          
-          {/* Summary */}
-          {placedPlants.length > 0 && (
-            <div style={{ padding: 8, borderTop: '1px solid #e5e7eb', backgroundColor: '#f0fdf4', fontSize: 10 }}>
-              <div><strong>Garden:</strong> {gardenWidth}' × {gardenHeight}'</div>
-              <div><strong>Area:</strong> {gardenWidth * gardenHeight} sq ft</div>
-              <div><strong>Plants:</strong> {placedPlants.length}</div>
+          <div className="flex gap-2">
+            {currentLayout && (
+              <>
+                <button
+                  onClick={() => saveLayout(currentLayout)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
+                >
+                  💾 Save
+                </button>
+                <button
+                  onClick={() => {
+                    const data = JSON.stringify(currentLayout, null, 2);
+                    const blob = new Blob([data], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentLayout.name.replace(/\s+/g, '-')}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium"
+                >
+                  📥 Export
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div className="flex-1 overflow-auto p-8 bg-gray-200">
+          {currentLayout ? (
+            <div
+              ref={canvasRef}
+              onClick={handleCanvasClick}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              className="relative bg-gradient-to-b from-green-100 to-green-200 rounded-xl shadow-lg border-4 border-green-300"
+              style={{
+                width: currentLayout.dimensions.width * SCALE_FACTOR,
+                height: currentLayout.dimensions.height * SCALE_FACTOR,
+                cursor: toolMode === 'plant' ? 'crosshair' : toolMode === 'eraser' ? 'not-allowed' : 'default',
+              }}
+            >
+              {/* Grid overlay */}
+              <div 
+                className="absolute inset-0 pointer-events-none opacity-20"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(to right, #000 1px, transparent 1px),
+                    linear-gradient(to bottom, #000 1px, transparent 1px)
+                  `,
+                  backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+                }}
+              />
+
+              {/* Zones */}
+              {currentLayout.zones.map((zone: GardenZone) => (
+                <div
+                  key={zone.id}
+                  className="absolute rounded-lg border-2 border-dashed flex items-center justify-center text-xs font-medium"
+                  style={{
+                    left: zone.x,
+                    top: zone.y,
+                    width: zone.width,
+                    height: zone.height,
+                    backgroundColor: zone.color + '60',
+                    borderColor: zone.color,
+                  }}
+                >
+                  {zone.name}
+                </div>
+              ))}
+
+              {/* Placed Plants */}
+              {currentLayout.placedPlants.map((placement: PlacedPlant) => {
+                const plant = getPlantById(placement.plantId);
+                if (!plant) return null;
+                const size = Math.max(plant.widthMax * 12, 24) * SCALE_FACTOR / 2;
+                const isSelected = selectedItemId === placement.id;
+                
+                return (
+                  <div
+                    key={placement.id}
+                    onMouseDown={(e: React.MouseEvent) => handlePlantDragStart(e, placement)}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      if (toolMode === 'select') {
+                        setSelectedItemId(placement.id);
+                      }
+                    }}
+                    onDoubleClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      setModalPlant(plant);
+                      setIsModalOpen(true);
+                    }}
+                    className={`absolute flex items-center justify-center rounded-full cursor-move transition-all ${
+                      isSelected ? 'ring-4 ring-blue-400 ring-offset-2 z-10' : 'hover:ring-2 hover:ring-green-400'
+                    }`}
+                    style={{
+                      left: placement.x - size / 2,
+                      top: placement.y - size / 2,
+                      width: size,
+                      height: size,
+                      backgroundColor: plant.color + '80',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    }}
+                    title={`${plant.commonName} - Double-click for details`}
+                  >
+                    <span style={{ fontSize: size * 0.5 }}>{plant.icon}</span>
+                  </div>
+                );
+              })}
+
+              {/* Scale indicator */}
+              <div className="absolute bottom-2 right-2 bg-white/80 px-2 py-1 rounded text-xs text-gray-600">
+                {currentLayout.dimensions.width}′ × {currentLayout.dimensions.height}′
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🌻</div>
+                <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                  No Garden Layout
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Create a new layout or load a saved one
+                </p>
+                <button
+                  onClick={createNewLayout}
+                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium"
+                >
+                  ➕ Create New Layout
+                </button>
+              </div>
             </div>
           )}
         </div>
+
+        {/* Status Bar */}
+        {currentLayout && (
+          <div className="bg-white border-t px-4 py-2 flex items-center justify-between text-sm text-gray-600">
+            <div className="flex gap-4">
+              <span>🌱 {currentLayout.placedPlants.length} plants</span>
+              <span>📐 {currentLayout.dimensions.width}′ × {currentLayout.dimensions.height}′</span>
+              <span>☀️ {currentLayout.sunExposure} sun</span>
+            </div>
+            <div className="flex gap-4">
+              {currentLayout.metrics && (
+                <>
+                  <span>🏆 Score: {currentLayout.metrics.habitatScore}</span>
+                  <span>💧 {currentLayout.metrics.waterSavings}% water saved</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Plant Detail Modal */}
+      <PlantDetailModal
+        plant={modalPlant}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        showAddButton={true}
+        onAddToGarden={(plant: Plant, qty: number) => {
+          if (!currentLayout) return;
+          // Add to center of visible canvas
+          for (let i = 0; i < qty; i++) {
+            const newPlant: PlacedPlant = {
+              id: `plant-${Date.now()}-${i}`,
+              plantId: plant.id,
+              x: (currentLayout.dimensions.width * SCALE_FACTOR / 2) + (i * 20),
+              y: currentLayout.dimensions.height * SCALE_FACTOR / 2,
+              quantity: 1,
+            };
+            setCurrentLayout({
+              ...currentLayout,
+              placedPlants: [...currentLayout.placedPlants, newPlant],
+            });
+          }
+        }}
+      />
     </div>
   );
-};
+}
 
 export default GardenLayoutPlanner;
