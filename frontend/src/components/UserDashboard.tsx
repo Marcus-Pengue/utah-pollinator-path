@@ -7,10 +7,11 @@ import AchievementBadges from './AchievementBadges';
 import RebateFinder from './RebateFinder';
 import GardenLayoutPlanner from './GardenLayoutPlanner';
 import AcademicAnalytics from './AcademicAnalytics';
+import SmartIrrigationSync from './SmartIrrigationSync';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,
-  BarChart3, Target, Zap, Crown, Flower2, DollarSign, Grid} from 'lucide-react';
+  BarChart3, Target, Zap, Crown, Flower2, DollarSign, Grid, Droplets} from 'lucide-react';
 import VerificationSystem, { VerificationStatus, PlantEntry } from './VerificationSystem';
 import NeighborRecruitment from './NeighborRecruitment';
 
@@ -68,7 +69,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
   onEditGarden,
   onStartCapture
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates' | 'layout' | 'analytics'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'verification' | 'observations' | 'network' | 'achievements' | 'planner' | 'blooms' | 'rebates' | 'layout' | 'analytics' | 'irrigation'>('overview');
 
   if (!isOpen) return null;
 
@@ -333,6 +334,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
             { id: 'rebates', label: 'Rebates', icon: DollarSign },
             { id: 'layout', label: 'Layout', icon: Grid },
             { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+            { id: 'irrigation', label: 'Irrigation', icon: Droplets },
           ].map(tab => (
             <button
               key={tab.id}
@@ -723,6 +725,19 @@ const UserDashboard: React.FC<UserDashboardProps> = ({
               observations={[]}
             />
           )}
+          {/* Irrigation Section */}
+          {activeSection === 'irrigation' && (
+            <SmartIrrigationSync
+              gardenPlants={gardenData?.plants?.map((p: string, i: number) => ({
+                id: String(i),
+                name: p,
+                waterNeeds: 'low' as const,
+                rootDepth: 'medium' as const
+              })) || []}
+              gardenSize={gardenData?.size ? parseInt(gardenData.size) : 200}
+            />
+          )}
+
 
 
 
