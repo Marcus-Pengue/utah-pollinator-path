@@ -610,7 +610,7 @@ const UnifiedInterface: React.FC<UnifiedInterfaceProps> = (props) => {
               )}
 
               {/* My Dashboard - Homeowner */}
-              {features.showDashboard && props.hasRegisteredGarden && (
+              {features.showDashboard && (
                 <button
                   onClick={props.onOpenDashboard}
                   style={{
