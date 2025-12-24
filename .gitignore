@@ -12,3 +12,5 @@ data/full_cache/*.json
 data/expanded_cache/*.json
 *.json.gz
 !src/static/downloads/*.gz
+src/static/wildlife_cache.json
+static/wildlife_cache.json

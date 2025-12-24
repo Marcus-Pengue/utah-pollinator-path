@@ -3,6 +3,7 @@ import INaturalistSync from './INaturalistSync';
 import NeighborDiscovery from './NeighborDiscovery';
 import GardenPlanner from './GardenPlanner';
 import BloomTracker from './BloomTracker';
+import AchievementBadges from './AchievementBadges';
 import {
   User, Leaf, Bug, Users, TrendingUp, Award, MapPin, Calendar,
   ChevronRight, Settings, LogOut, Shield, Camera, Edit, Share2,

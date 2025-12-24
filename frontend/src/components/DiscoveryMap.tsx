@@ -11,6 +11,7 @@ import UserDashboard from './UserDashboard';
 import Leaderboard from './Leaderboard';
 import AdminDashboard from './AdminDashboard';
 import CorridorVisualization from './CorridorVisualization';
+import SeasonalTimeline from './SeasonalTimeline';
 import UnifiedInterface from './UnifiedInterface';
 import { AppMode } from './ModeSelector';
 import SpeciesSearch from './SpeciesSearch';
@@ -123,6 +124,7 @@ const DiscoveryMap: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'points'>('grid');
   
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playSpeed, setPlaySpeed] = useState(800);
@@ -354,6 +356,21 @@ const DiscoveryMap: React.FC = () => {
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
 
   const availableYears = useMemo(() => Object.keys(yearStats).map(Number).sort((a, b) => a - b), [yearStats]);
+
+  // Calculate observation counts by month for timeline
+  const monthCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    wildlifeFeatures.forEach(f => {
+      const props = f.properties || {};
+      const year = props.year;
+      const month = props.month;
+      if (year && month) {
+        const key = `${year}-${String(month).padStart(2, '0')}`;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [wildlifeFeatures]);
   const minYear = availableYears[0] || 1871;
   const maxYear = availableYears[availableYears.length - 1] || 2025;
 
@@ -1069,6 +1086,24 @@ const DiscoveryMap: React.FC = () => {
       
 
       
+      
+      {/* Seasonal Timeline - Government/Academic modes */}
+      {(appMode === 'government' || appMode === 'academic') && !compareMode && (
+        <div style={{ position: 'absolute', bottom: 20, left: 20, zIndex: 150 }}>
+          <SeasonalTimeline
+            availableYears={availableYears}
+            currentYear={selectedYear || availableYears[availableYears.length - 1] || 2024}
+            currentMonth={selectedMonth || new Date().getMonth() + 1}
+            onYearChange={(year) => setSelectedYear(year)}
+            onMonthChange={(month) => setSelectedMonth(month)}
+            observationCounts={monthCounts || {}}
+            isPlaying={playing}
+            onPlayingChange={setPlaying}
+          />
+        </div>
+      )}
+
+
       {/* Leaderboard Button */}
       <button
         onClick={() => setShowLeaderboard(true)}
