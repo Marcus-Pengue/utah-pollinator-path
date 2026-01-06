@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Sparkles, Droplets, DollarSign, Trophy, ArrowLeft, Flower2, Grid3X3, Users, Calendar, TrendingUp, Bell, ChevronRight, Star } from 'lucide-react';
+import { Home, Sparkles, Droplets, DollarSign, Trophy, ArrowLeft, Flower2, Grid3X3, Users, Calendar, TrendingUp, Bell, ChevronRight, Star, Target, Loader2, Shield } from 'lucide-react';
 
 // Import components that work standalone
 import AutoLayoutGenerator from './AutoLayoutGenerator';
@@ -8,8 +8,10 @@ import GardenLayoutPlanner from './GardenLayoutPlanner';
 import BloomTracker from './BloomTracker';
 import SmartIrrigationSync from './SmartIrrigationSync';
 import RebateFinder from './RebateFinder';
+import HabitatScoreCard from './HabitatScoreCard';
+import VerificationSystem from './VerificationSystem';
 
-type Tab = 'overview' | 'generate' | 'planner' | 'bloom' | 'water' | 'rebates' | 'achievements' | 'neighbors';
+type Tab = 'overview' | 'score' | 'verify' | 'generate' | 'planner' | 'bloom' | 'water' | 'rebates' | 'achievements' | 'neighbors';
 
 interface TabConfig {
   id: Tab;
@@ -20,6 +22,8 @@ interface TabConfig {
 
 const TABS: TabConfig[] = [
   { id: 'overview', name: 'My Garden', icon: <Home className="w-5 h-5" />, description: 'Dashboard overview' },
+  { id: 'score', name: 'Habitat Score', icon: <Target className="w-5 h-5" />, description: 'Your detailed score' },
+  { id: 'verify', name: 'Get Verified', icon: <Shield className="w-5 h-5" />, description: '$15 professional badge' },
   { id: 'generate', name: 'AI Generator', icon: <Sparkles className="w-5 h-5" />, description: 'Auto-design your garden' },
   { id: 'planner', name: 'Layout Planner', icon: <Grid3X3 className="w-5 h-5" />, description: 'Drag-and-drop design' },
   { id: 'bloom', name: 'Bloom Tracker', icon: <Flower2 className="w-5 h-5" />, description: 'Track what\'s flowering' },
@@ -28,6 +32,22 @@ const TABS: TabConfig[] = [
   { id: 'achievements', name: 'Achievements', icon: <Trophy className="w-5 h-5" />, description: 'Your badges & progress' },
   { id: 'neighbors', name: 'Neighbors', icon: <Users className="w-5 h-5" />, description: 'Connect & compete' },
 ];
+
+// API response type
+interface HabitatScore {
+  overall_score: number;
+  grade: string;
+  factors: {
+    pollinatorActivity: { score: number; max_score: number; recommendations: string[] };
+    septemberGap: { score: number; max_score: number; recommendations: string[] };
+    connectivity: { score: number; max_score: number; recommendations: string[] };
+    speciesDiversity: { score: number; max_score: number; recommendations: string[] };
+    bloomCoverage: { score: number; max_score: number; recommendations: string[] };
+  };
+  top_recommendations: string[];
+  nearby_observations: number;
+  unique_species: number;
+}
 
 // Seasonal tips based on month
 const getSeasonalTip = () => {
@@ -49,29 +69,98 @@ const getSeasonalTip = () => {
   return tips[month];
 };
 
+// Grade color helper
+const getGradeColor = (grade: string) => {
+  if (grade.startsWith('A')) return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' };
+  if (grade.startsWith('B')) return { bg: 'bg-lime-100', text: 'text-lime-700', border: 'border-lime-200' };
+  if (grade.startsWith('C')) return { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' };
+  if (grade.startsWith('D')) return { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' };
+  return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' };
+};
+
 export default function HomeownerDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [habitatScore, setHabitatScore] = useState<HabitatScore | null>(null);
+  const [scoreLoading, setScoreLoading] = useState(true);
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const seasonalTip = getSeasonalTip();
 
-  // Mock user data - in production this would come from state/API
+  // User's location - in production, get from user profile or geolocation
+  const userLocation = {
+    latitude: 40.6668,  // Murray, UT
+    longitude: -111.8880,
+    address: 'Murray, UT'
+  };
+
+  // Fetch habitat score on mount
+  useEffect(() => {
+    const fetchScore = async () => {
+      setScoreLoading(true);
+      setScoreError(null);
+      
+      try {
+        const response = await fetch('http://localhost:8000/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            address: userLocation.address
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch score');
+        }
+        
+        const data = await response.json();
+        setHabitatScore(data);
+      } catch (err) {
+        console.error('Score fetch error:', err);
+        setScoreError(err instanceof Error ? err.message : 'Unknown error');
+        // Use fallback mock data if API fails
+        setHabitatScore({
+          overall_score: 73,
+          grade: 'C',
+          factors: {
+            pollinatorActivity: { score: 15, max_score: 25, recommendations: [] },
+            septemberGap: { score: 12, max_score: 30, recommendations: ['Plant late-blooming species'] },
+            connectivity: { score: 16, max_score: 20, recommendations: [] },
+            speciesDiversity: { score: 9, max_score: 15, recommendations: [] },
+            bloomCoverage: { score: 6, max_score: 10, recommendations: [] },
+          },
+          top_recommendations: ['Plant late-blooming species for September'],
+          nearby_observations: 47,
+          unique_species: 12
+        });
+      } finally {
+        setScoreLoading(false);
+      }
+    };
+    
+    fetchScore();
+  }, []);
+
+  // Compute user data from real score when available
   const userData = {
     name: 'Marcus',
     plantsAdded: 12,
     waterSaved: 4700,
-    speciesAttracted: 8,
-    habitatScore: 73,
+    speciesAttracted: habitatScore?.unique_species || 8,
+    habitatScore: habitatScore?.overall_score || 0,
+    grade: habitatScore?.grade || '-',
     rank: 2,
     totalNeighbors: 12,
   };
 
   const neighborLeaderboard = [
     { name: 'Sarah M.', score: 82, isYou: false },
-    { name: 'You', score: 73, isYou: true },
+    { name: 'You', score: userData.habitatScore, isYou: true },
     { name: 'James K.', score: 67, isYou: false },
     { name: 'Maria L.', score: 64, isYou: false },
     { name: 'David R.', score: 58, isYou: false },
-  ];
+  ].sort((a, b) => b.score - a.score);
 
   const nextBadge = {
     name: 'Water Wise II',
@@ -85,6 +174,102 @@ export default function HomeownerDashboard() {
     { plant: 'Firecracker Penstemon', status: 'blooming', emoji: '🌺' },
     { plant: 'Blue Flax', status: 'budding', emoji: '🌸' },
   ];
+
+  // Score summary card for overview
+  const ScoreSummaryCard = () => {
+    if (scoreLoading) {
+      return (
+        <div className="bg-white rounded-xl p-6 shadow-sm flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-green-600 mr-2" />
+          <span className="text-gray-600">Calculating your habitat score...</span>
+        </div>
+      );
+    }
+
+    const gradeColors = getGradeColor(userData.grade);
+    const septemberScore = habitatScore?.factors.septemberGap;
+    const hasSeptemberGap = septemberScore && septemberScore.score < 18;
+
+    return (
+      <div className="bg-white rounded-xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-green-600" />
+            <h3 className="font-semibold text-gray-800">Habitat Score</h3>
+          </div>
+          <button
+            onClick={() => setActiveTab('score')}
+            className="text-sm text-green-600 hover:text-green-700 font-medium"
+          >
+            View details →
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-6">
+          {/* Score Circle */}
+          <div className={`w-24 h-24 rounded-full ${gradeColors.bg} ${gradeColors.border} border-4 flex flex-col items-center justify-center`}>
+            <span className={`text-3xl font-bold ${gradeColors.text}`}>{userData.grade}</span>
+            <span className="text-sm text-gray-500">{Math.round(userData.habitatScore)}/100</span>
+          </div>
+          
+          {/* Quick Factors */}
+          <div className="flex-1 space-y-2">
+            {habitatScore && Object.entries(habitatScore.factors).slice(0, 3).map(([key, factor]) => {
+              const percentage = (factor.score / factor.max_score) * 100;
+              const labels: Record<string, string> = {
+                septemberGap: '🍂 September',
+                pollinatorActivity: '🦋 Activity',
+                connectivity: '🔗 Connectivity'
+              };
+              return (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-xs w-24 text-gray-600">{labels[key] || key}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${percentage < 40 ? 'bg-red-400' : percentage < 70 ? 'bg-yellow-400' : 'bg-green-400'}`}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-gray-500 w-8">{Math.round(percentage)}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* September Gap Alert */}
+        {hasSeptemberGap && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <span className="text-lg">🚨</span>
+              <div>
+                <div className="font-medium text-red-800 text-sm">September Gap Detected</div>
+                <div className="text-xs text-red-600 mt-1">
+                  Your property lacks late-season blooms when pollinators need them most.
+                </div>
+                <button 
+                  onClick={() => setActiveTab('generate')}
+                  className="mt-2 text-xs font-medium text-red-700 hover:text-red-800"
+                >
+                  Get plant recommendations →
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Top Recommendation */}
+        {habitatScore?.top_recommendations[0] && !hasSeptemberGap && (
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-amber-600" />
+              <span className="text-sm text-amber-800">{habitatScore.top_recommendations[0]}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -114,6 +299,9 @@ export default function HomeownerDashboard() {
               </div>
             </div>
 
+            {/* Habitat Score Summary - NEW */}
+            <ScoreSummaryCard />
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white rounded-xl p-4 shadow-sm">
@@ -129,11 +317,16 @@ export default function HomeownerDashboard() {
               <div className="bg-white rounded-xl p-4 shadow-sm">
                 <div className="text-3xl mb-1">🦋</div>
                 <div className="text-2xl font-bold text-purple-600">{userData.speciesAttracted}</div>
-                <div className="text-sm text-gray-500">Species Attracted</div>
+                <div className="text-sm text-gray-500">Species Nearby</div>
               </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm">
-                <div className="text-3xl mb-1">🏆</div>
-                <div className="text-2xl font-bold text-amber-600">{userData.habitatScore}</div>
+              <div 
+                className="bg-white rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => setActiveTab('score')}
+              >
+                <div className="text-3xl mb-1">🎯</div>
+                <div className="text-2xl font-bold text-amber-600">
+                  {scoreLoading ? '...' : userData.habitatScore}
+                </div>
                 <div className="text-sm text-gray-500">Habitat Score</div>
               </div>
             </div>
@@ -211,19 +404,19 @@ export default function HomeownerDashboard() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`font-bold ${neighbor.isYou ? 'text-green-600' : 'text-gray-600'}`}>
-                        {neighbor.score}
+                        {Math.round(neighbor.score)}
                       </span>
                       <span className="text-gray-400 text-sm">pts</span>
                     </div>
                   </div>
                 ))}
               </div>
-              {userData.rank > 1 && (
+              {userData.rank > 1 && neighborLeaderboard[0] && (
                 <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
                   <div className="flex items-center gap-2 text-amber-800">
                     <TrendingUp className="w-4 h-4" />
                     <span className="text-sm font-medium">
-                      {neighborLeaderboard[0].score - userData.habitatScore} points to overtake {neighborLeaderboard[0].name}!
+                      {Math.round(neighborLeaderboard[0].score - userData.habitatScore)} points to reach #1!
                     </span>
                   </div>
                 </div>
@@ -269,6 +462,13 @@ export default function HomeownerDashboard() {
               <h3 className="font-semibold text-gray-800 mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <button
+                  onClick={() => setActiveTab('score')}
+                  className="p-4 bg-amber-50 hover:bg-amber-100 rounded-xl text-center transition-colors group"
+                >
+                  <Target className="w-6 h-6 text-amber-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="text-sm font-medium text-gray-700">View Score</span>
+                </button>
+                <button
                   onClick={() => setActiveTab('generate')}
                   className="p-4 bg-green-50 hover:bg-green-100 rounded-xl text-center transition-colors group"
                 >
@@ -289,13 +489,6 @@ export default function HomeownerDashboard() {
                   <Flower2 className="w-6 h-6 text-pink-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
                   <span className="text-sm font-medium text-gray-700">Log Bloom</span>
                 </button>
-                <button
-                  onClick={() => setActiveTab('planner')}
-                  className="p-4 bg-amber-50 hover:bg-amber-100 rounded-xl text-center transition-colors group"
-                >
-                  <Grid3X3 className="w-6 h-6 text-amber-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <span className="text-sm font-medium text-gray-700">Plan Garden</span>
-                </button>
               </div>
             </div>
 
@@ -304,10 +497,10 @@ export default function HomeownerDashboard() {
               <h3 className="font-semibold text-gray-800 mb-4">Recent Activity</h3>
               <div className="space-y-3">
                 {[
+                  { icon: '🎯', text: 'Habitat score calculated', time: 'Just now', points: '' },
                   { icon: '🌸', text: 'Logged bloom: Firecracker Penstemon', time: '2 hours ago', points: '+5' },
                   { icon: '🦋', text: 'Spotted: Painted Lady butterfly', time: '1 day ago', points: '+10' },
                   { icon: '💧', text: 'Watering schedule optimized', time: '2 days ago', points: '+3' },
-                  { icon: '🏆', text: 'Earned: Early Bloomer badge', time: '3 days ago', points: '+25' },
                 ].map((activity, i) => (
                   <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center gap-3">
@@ -317,7 +510,9 @@ export default function HomeownerDashboard() {
                         <div className="text-xs text-gray-500">{activity.time}</div>
                       </div>
                     </div>
-                    <span className="text-green-600 font-medium text-sm">{activity.points}</span>
+                    {activity.points && (
+                      <span className="text-green-600 font-medium text-sm">{activity.points}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -325,7 +520,81 @@ export default function HomeownerDashboard() {
           </div>
         );
       
-      case 'generate':
+      case 'score':
+        return (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-6 text-white">
+              <h2 className="text-2xl font-bold mb-2">Your Habitat Score</h2>
+              <p className="text-amber-100">
+                Based on {habitatScore?.nearby_observations.toLocaleString() || 0} wildlife observations 
+                within 500m of your property
+              </p>
+            </div>
+
+            {/* Full Score Card */}
+            <div className="flex justify-center">
+              <HabitatScoreCard
+                latitude={userLocation.latitude}
+                longitude={userLocation.longitude}
+                address={userLocation.address}
+                onScoreCalculated={(score) => setHabitatScore(score as HabitatScore)}
+              />
+            </div>
+
+            {/* What This Means */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+              <h3 className="font-semibold text-gray-800 mb-4">What This Means</h3>
+              <div className="space-y-4 text-sm text-gray-600">
+                <p>
+                  Your habitat score is calculated using <strong>759,640 real wildlife observations</strong> from 
+                  the GBIF database, covering Utah's Wasatch Front region.
+                </p>
+                <p>
+                  The <strong>September Gap</strong> is the most important factor because research shows 
+                  84.5% of Utah properties lack adequate late-season pollinator resources—this is when 
+                  pollinators need food most to survive winter.
+                </p>
+                <p>
+                  Improving your score helps create <strong>pollinator corridors</strong>—connected 
+                  pathways of habitat that allow bees, butterflies, and birds to thrive.
+                </p>
+              </div>
+              
+              <button
+                onClick={() => setActiveTab('generate')}
+                className="mt-6 w-full py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+              >
+                🌱 Get Personalized Plant Recommendations
+              </button>
+            </div>
+          </div>
+        );
+      
+      
+      case 'verify':
+        return (
+          <VerificationSystem
+            gardenId="garden-001"
+            gardenName="My Pollinator Garden"
+            currentTier="bronze"
+            currentScore={habitatScore?.overall_score || 0}
+            verificationStatus={{
+              level: 'unverified',
+              nextVerificationDue: undefined
+            }}
+            plants={[
+              { id: '1', name: 'Rabbitbrush', plantedDate: '2024-09-15', isNewPlanting: true, verified: false, basePoints: 10, verifiedPoints: 15 },
+              { id: '2', name: 'Blue Flax', plantedDate: '2024-04-20', isNewPlanting: true, verified: false, basePoints: 8, verifiedPoints: 12 },
+              { id: '3', name: 'Penstemon', plantedDate: '2024-05-10', isNewPlanting: true, verified: false, basePoints: 10, verifiedPoints: 15 },
+            ]}
+            onScheduleProfessional={(date, time) => console.log('Schedule:', date, time)}
+            onRequestCommunity={() => console.log('Request community verification')}
+            onAddNewPlant={(plant) => console.log('Add plant:', plant)}
+          />
+        );
+      
+case 'generate':
         return <AutoLayoutGenerator />;
       
       case 'planner':
@@ -372,7 +641,7 @@ export default function HomeownerDashboard() {
                   { icon: '💧', name: 'Water Wise', desc: 'Save 1000+ gallons', earned: true, date: 'Dec 15' },
                   { icon: '🦋', name: 'Butterfly Host', desc: 'Plant a host species', earned: true, date: 'Dec 20' },
                   { icon: '🐝', name: 'Bee Paradise', desc: '5+ bee species', earned: false, progress: 60 },
-                  { icon: '🏆', name: 'Habitat Hero', desc: 'Score 80+', earned: false, progress: 91 },
+                  { icon: '🏆', name: 'Habitat Hero', desc: 'Score 80+', earned: false, progress: Math.round((userData.habitatScore / 80) * 100) },
                   { icon: '👥', name: 'Neighbor Network', desc: 'Connect with 3 neighbors', earned: false, progress: 33 },
                   { icon: '📸', name: 'Citizen Scientist', desc: '50 observations', earned: false, progress: 46 },
                 ].map((badge, i) => (
@@ -394,7 +663,7 @@ export default function HomeownerDashboard() {
                         <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-green-500 rounded-full"
-                            style={{ width: `${badge.progress}%` }}
+                            style={{ width: `${Math.min(badge.progress || 0, 100)}%` }}
                           />
                         </div>
                         <div className="text-xs text-gray-500 mt-1">{badge.progress}%</div>
@@ -415,11 +684,11 @@ export default function HomeownerDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-green-100 text-sm">Your Rank in Murray</div>
-                  <div className="text-4xl font-bold">#{userData.rank}</div>
+                  <div className="text-4xl font-bold">#{neighborLeaderboard.findIndex(n => n.isYou) + 1}</div>
                   <div className="text-green-100">of {userData.totalNeighbors} gardeners</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-5xl font-bold">{userData.habitatScore}</div>
+                  <div className="text-5xl font-bold">{Math.round(userData.habitatScore)}</div>
                   <div className="text-green-100">Habitat Score</div>
                 </div>
               </div>
@@ -431,27 +700,27 @@ export default function HomeownerDashboard() {
               <div className="space-y-3">
                 {[
                   { rank: 1, name: 'Sarah M.', distance: '0.2 mi', plants: 24, score: 82, trend: '+5' },
-                  { rank: 2, name: 'You', distance: '-', plants: 12, score: 73, trend: '+8', isYou: true },
+                  { rank: 2, name: 'You', distance: '-', plants: 12, score: userData.habitatScore, trend: '+8', isYou: true },
                   { rank: 3, name: 'James K.', distance: '0.4 mi', plants: 18, score: 67, trend: '+3' },
                   { rank: 4, name: 'Maria L.', distance: '0.5 mi', plants: 15, score: 64, trend: '+2' },
                   { rank: 5, name: 'David R.', distance: '0.3 mi', plants: 10, score: 58, trend: '+4' },
                   { rank: 6, name: 'Linda T.', distance: '0.6 mi', plants: 8, score: 52, trend: '+1' },
                   { rank: 7, name: 'Robert C.', distance: '0.4 mi', plants: 6, score: 45, trend: '+2' },
-                ].map((neighbor) => (
+                ].sort((a, b) => b.score - a.score).map((neighbor, i) => (
                   <div 
-                    key={neighbor.rank} 
+                    key={i} 
                     className={`flex items-center justify-between p-4 rounded-lg ${
                       neighbor.isYou ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
-                        neighbor.rank === 1 ? 'bg-amber-100 text-amber-700' :
-                        neighbor.rank === 2 ? 'bg-gray-200 text-gray-600' :
-                        neighbor.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                        i === 0 ? 'bg-amber-100 text-amber-700' :
+                        i === 1 ? 'bg-gray-200 text-gray-600' :
+                        i === 2 ? 'bg-orange-100 text-orange-700' :
                         'bg-gray-100 text-gray-500'
                       }`}>
-                        {neighbor.rank <= 3 ? ['🥇', '🥈', '🥉'][neighbor.rank - 1] : neighbor.rank}
+                        {i <= 2 ? ['🥇', '🥈', '🥉'][i] : i + 1}
                       </div>
                       <div>
                         <div className={`font-medium ${neighbor.isYou ? 'text-green-700' : 'text-gray-800'}`}>
@@ -464,7 +733,7 @@ export default function HomeownerDashboard() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xl font-bold text-gray-800">{neighbor.score}</div>
+                      <div className="text-xl font-bold text-gray-800">{Math.round(neighbor.score)}</div>
                       <div className="text-xs text-green-600">↑ {neighbor.trend} this week</div>
                     </div>
                   </div>
@@ -511,7 +780,12 @@ export default function HomeownerDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-sm text-gray-500">Murray, UT</div>
+              <div className="text-sm text-gray-500">{userLocation.address}</div>
+              {!scoreLoading && habitatScore && (
+                <div className={`px-2 py-1 rounded-full text-xs font-bold ${getGradeColor(habitatScore.grade).bg} ${getGradeColor(habitatScore.grade).text}`}>
+                  {habitatScore.grade}
+                </div>
+              )}
               <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-green-700">MP</span>
               </div>
