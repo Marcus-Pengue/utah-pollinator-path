@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Sparkles, Droplets, DollarSign, Trophy, ArrowLeft, Flower2, Grid3X3, Users, Calendar, TrendingUp, Bell, ChevronRight, Star, Target, Loader2, Shield } from 'lucide-react';
+import { Home, Sparkles, Droplets, DollarSign, Trophy, ArrowLeft, Flower2, Grid3X3, Users, Calendar, TrendingUp, Bell, ChevronRight, Star, Target, Loader2, Shield, MapPin } from 'lucide-react';
 
 // Import components that work standalone
 import AutoLayoutGenerator from './AutoLayoutGenerator';
@@ -11,8 +11,9 @@ import RebateFinder from './RebateFinder';
 import HabitatScoreCard from './HabitatScoreCard';
 import VerificationSystem from './VerificationSystem';
 import Leaderboard from './Leaderboard';
+import GardenRegistration from './GardenRegistration';
 
-type Tab = 'overview' | 'score' | 'verify' | 'generate' | 'planner' | 'bloom' | 'water' | 'rebates' | 'achievements' | 'neighbors';
+type Tab = 'overview' | 'score' | 'verify' | 'register' | 'generate' | 'planner' | 'bloom' | 'water' | 'rebates' | 'achievements' | 'neighbors';
 
 interface TabConfig {
   id: Tab;
@@ -25,6 +26,7 @@ const TABS: TabConfig[] = [
   { id: 'overview', name: 'My Garden', icon: <Home className="w-5 h-5" />, description: 'Dashboard overview' },
   { id: 'score', name: 'Habitat Score', icon: <Target className="w-5 h-5" />, description: 'Your detailed score' },
   { id: 'verify', name: 'Get Verified', icon: <Shield className="w-5 h-5" />, description: '$15 professional badge' },
+  { id: 'register', name: 'Register Garden', icon: <MapPin className="w-5 h-5" />, description: 'Add to leaderboard' },
   { id: 'generate', name: 'AI Generator', icon: <Sparkles className="w-5 h-5" />, description: 'Auto-design your garden' },
   { id: 'planner', name: 'Layout Planner', icon: <Grid3X3 className="w-5 h-5" />, description: 'Drag-and-drop design' },
   { id: 'bloom', name: 'Bloom Tracker', icon: <Flower2 className="w-5 h-5" />, description: 'Track what\'s flowering' },
@@ -612,6 +614,39 @@ export default function HomeownerDashboard() {
             onScheduleProfessional={(date, time) => console.log('Schedule:', date, time)}
             onRequestCommunity={() => console.log('Request community verification')}
             onAddNewPlant={(plant) => console.log('Add plant:', plant)}
+          />
+        );
+      
+
+      case 'register':
+        return (
+          <GardenRegistration
+            lat={userLocation.latitude}
+            lng={userLocation.longitude}
+            onSubmit={async (data) => {
+              try {
+                const response = await fetch('http://localhost:8000/api/garden/register', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    lat: userLocation.latitude,
+                    lng: userLocation.longitude,
+                    plants: data.plants || [],
+                    features: data.features || [],
+                    size: data.size || 'medium',
+                    score: data.score || 0,
+                    name: data.name || 'My Garden'
+                  })
+                });
+                if (response.ok) {
+                  alert('Garden registered! Check the Neighbors tab to see your ranking.');
+                  setActiveTab('neighbors');
+                }
+              } catch (err) {
+                console.error('Registration error:', err);
+              }
+            }}
+            onCancel={() => setActiveTab('overview')}
           />
         );
       
