@@ -6,7 +6,6 @@ import random
 
 app = FastAPI()
 
-# CORS - must be before routes
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,19 +38,16 @@ def health():
 
 @app.post("/api/score")
 def calculate_score(req: ScoringRequest):
-    # Use location to generate consistent "random" scores
     seed = int((req.latitude * 1000 + req.longitude * 1000) % 10000)
     random.seed(seed)
     
-    # Generate realistic scores
     act_score = random.randint(5, 20)
-    sept_score = random.randint(0, 18)  # Usually low - the September gap!
+    sept_score = random.randint(0, 18)
     conn_score = random.randint(8, 18)
     div_score = random.randint(3, 12)
     bloom_score = random.randint(2, 8)
     
     overall = act_score + sept_score + conn_score + div_score + bloom_score
-    
     nearby_obs = random.randint(10, 150)
     species_count = random.randint(5, 35)
     
@@ -114,8 +110,36 @@ def calculate_score(req: ScoringRequest):
         "methodology_version": "1.0.0-mock"
     }
 
+@app.get("/api/leaderboard")
+def get_leaderboard(city: str = "Murray"):
+    random.seed(42)
+    neighborhoods = ["Liberty", "Hillcrest", "Fashion Place", "Vine Street", "Woodstock"]
+    tiers = ["Pollinator Champion", "Habitat Hero", "Bee Friendly", "Growing", "Seedling"]
+    gardens = []
+    for i in range(25):
+        score = random.randint(30, 95)
+        tier_idx = 0 if score >= 85 else 1 if score >= 70 else 2 if score >= 55 else 3 if score >= 40 else 4
+        gardens.append({
+            "id": f"garden-{i+1:03d}",
+            "anonymousId": f"Garden #{i+1}",
+            "city": city,
+            "neighborhood": random.choice(neighborhoods),
+            "score": score,
+            "verifiedScore": score + random.randint(0, 15) if random.random() > 0.5 else score,
+            "tier": tiers[tier_idx],
+            "plantCount": random.randint(5, 40),
+            "nativePlantCount": random.randint(3, 25),
+            "fallBloomerCount": random.randint(0, 10),
+            "observationCount": random.randint(0, 50),
+            "referralCount": random.randint(0, 5),
+            "verificationLevel": random.choice(["unverified", "community", "professional"]),
+            "registeredAt": f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}",
+            "isCurrentUser": i == 7
+        })
+    gardens.sort(key=lambda x: x["score"], reverse=True)
+    return {"city": city, "gardens": gardens}
+
 if __name__ == "__main__":
     import uvicorn
-    print("🐝 BeehiveConnect Scoring API (Mock Mode)")
-    print("   Ready at http://localhost:8000")
+    print("🐝 BeehiveConnect API")
     uvicorn.run(app, host="0.0.0.0", port=8000)

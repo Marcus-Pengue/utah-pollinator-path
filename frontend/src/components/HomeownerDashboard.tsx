@@ -10,6 +10,7 @@ import SmartIrrigationSync from './SmartIrrigationSync';
 import RebateFinder from './RebateFinder';
 import HabitatScoreCard from './HabitatScoreCard';
 import VerificationSystem from './VerificationSystem';
+import Leaderboard from './Leaderboard';
 
 type Tab = 'overview' | 'score' | 'verify' | 'generate' | 'planner' | 'bloom' | 'water' | 'rebates' | 'achievements' | 'neighbors';
 
@@ -82,6 +83,8 @@ export default function HomeownerDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [habitatScore, setHabitatScore] = useState<HabitatScore | null>(null);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
   const [scoreLoading, setScoreLoading] = useState(true);
   const [scoreError, setScoreError] = useState<string | null>(null);
   const seasonalTip = getSeasonalTip();
@@ -141,6 +144,24 @@ export default function HomeownerDashboard() {
     
     fetchScore();
   }, []);
+
+  // Fetch leaderboard data
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/leaderboard?city=Murray');
+        if (response.ok) {
+          const data = await response.json();
+          setLeaderboardData(data.gardens || []);
+        }
+      } catch (err) {
+        console.error('Leaderboard fetch error:', err);
+      }
+    };
+    fetchLeaderboard();
+  }, []);
+
+
 
   // Compute user data from real score when available
   const userData = {
@@ -679,13 +700,21 @@ case 'generate':
       case 'neighbors':
         return (
           <div className="space-y-6">
+            {/* Leaderboard Modal */}
+            <Leaderboard
+              isOpen={leaderboardOpen}
+              onClose={() => setLeaderboardOpen(false)}
+              userGardenId="garden-008"
+              gardens={leaderboardData}
+            />
+            
             {/* Your Rank */}
             <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-green-100 text-sm">Your Rank in Murray</div>
-                  <div className="text-4xl font-bold">#{neighborLeaderboard.findIndex(n => n.isYou) + 1}</div>
-                  <div className="text-green-100">of {userData.totalNeighbors} gardeners</div>
+                  <div className="text-4xl font-bold">#{leaderboardData.findIndex(g => g.isCurrentUser) + 1 || '?'}</div>
+                  <div className="text-green-100">of {leaderboardData.length || '?'} gardeners</div>
                 </div>
                 <div className="text-right">
                   <div className="text-5xl font-bold">{Math.round(userData.habitatScore)}</div>
@@ -694,23 +723,24 @@ case 'generate':
               </div>
             </div>
 
-            {/* Full Leaderboard */}
+            {/* View Full Leaderboard Button */}
+            <button
+              onClick={() => setLeaderboardOpen(true)}
+              className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-semibold text-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <Trophy className="w-5 h-5" />
+              View Full City Leaderboard
+            </button>
+
+            {/* Top 5 Preview */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Neighborhood Leaderboard</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Gardeners in Murray</h3>
               <div className="space-y-3">
-                {[
-                  { rank: 1, name: 'Sarah M.', distance: '0.2 mi', plants: 24, score: 82, trend: '+5' },
-                  { rank: 2, name: 'You', distance: '-', plants: 12, score: userData.habitatScore, trend: '+8', isYou: true },
-                  { rank: 3, name: 'James K.', distance: '0.4 mi', plants: 18, score: 67, trend: '+3' },
-                  { rank: 4, name: 'Maria L.', distance: '0.5 mi', plants: 15, score: 64, trend: '+2' },
-                  { rank: 5, name: 'David R.', distance: '0.3 mi', plants: 10, score: 58, trend: '+4' },
-                  { rank: 6, name: 'Linda T.', distance: '0.6 mi', plants: 8, score: 52, trend: '+1' },
-                  { rank: 7, name: 'Robert C.', distance: '0.4 mi', plants: 6, score: 45, trend: '+2' },
-                ].sort((a, b) => b.score - a.score).map((neighbor, i) => (
+                {leaderboardData.slice(0, 5).map((garden, i) => (
                   <div 
-                    key={i} 
+                    key={garden.id} 
                     className={`flex items-center justify-between p-4 rounded-lg ${
-                      neighbor.isYou ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50'
+                      garden.isCurrentUser ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center gap-4">
@@ -723,18 +753,18 @@ case 'generate':
                         {i <= 2 ? ['🥇', '🥈', '🥉'][i] : i + 1}
                       </div>
                       <div>
-                        <div className={`font-medium ${neighbor.isYou ? 'text-green-700' : 'text-gray-800'}`}>
-                          {neighbor.name}
-                          {neighbor.isYou && <span className="ml-2 text-xs bg-green-200 text-green-700 px-2 py-0.5 rounded-full">You</span>}
+                        <div className={`font-medium ${garden.isCurrentUser ? 'text-green-700' : 'text-gray-800'}`}>
+                          {garden.anonymousId}
+                          {garden.isCurrentUser && <span className="ml-2 text-xs bg-green-200 text-green-700 px-2 py-0.5 rounded-full">You</span>}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {neighbor.distance !== '-' && `${neighbor.distance} away • `}{neighbor.plants} plants
+                          {garden.neighborhood} • {garden.plantCount} plants
                         </div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xl font-bold text-gray-800">{Math.round(neighbor.score)}</div>
-                      <div className="text-xs text-green-600">↑ {neighbor.trend} this week</div>
+                      <div className="text-xl font-bold text-gray-800">{garden.score}</div>
+                      <div className="text-xs text-gray-500">{garden.tier}</div>
                     </div>
                   </div>
                 ))}
