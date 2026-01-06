@@ -36,6 +36,11 @@ interface GeneratedPlantSelection {
   score: number;
 }
 
+// Props interface
+interface AutoLayoutGeneratorProps {
+  defaultMode?: string;  // 'gap-filler', 'most-points', etc.
+}
+
 // Helper to get pollinator value
 const getPollinatorValue = (p: Plant): number => {
   return Math.round((p.nectarValue + p.pollenValue) / 2);
@@ -136,11 +141,15 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // Water zone labels
 const WATER_ZONES = ['None', 'Very Low', 'Low', 'Moderate', 'Regular'];
 
-export function AutoLayoutGenerator() {
+export const AutoLayoutGenerator: React.FC<AutoLayoutGeneratorProps> = ({ defaultMode }) => {
+  // Find initial mode based on prop
+  const initialMode = defaultMode 
+    ? OPTIMIZATION_MODES.find(m => m.id === defaultMode) || OPTIMIZATION_MODES[0]
+    : OPTIMIZATION_MODES[0];
+
   // Garden context for integration
   const { setPendingGeneratedLayout, setNavigateToPlanner, convertGeneratedToPlanner, saveLayout } = useGarden();
 
-  // Configuration state
   const [config, setConfig] = useState<LayoutConfig>({
     width: 40,
     height: 30,
@@ -151,7 +160,7 @@ export function AutoLayoutGenerator() {
   });
 
   // Selected mode
-  const [selectedMode, setSelectedMode] = useState<OptimizationMode>(OPTIMIZATION_MODES[0]);
+  const [selectedMode, setSelectedMode] = useState<OptimizationMode>(initialMode);
 
   // Generated layout
   const [generatedPlants, setGeneratedPlants] = useState<GeneratedPlantSelection[]>([]);

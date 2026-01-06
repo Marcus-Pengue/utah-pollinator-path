@@ -651,7 +651,9 @@ export default function HomeownerDashboard() {
         );
       
 case 'generate':
-        return <AutoLayoutGenerator />;
+        // Pass gap-filler mode if September score is low
+        const septemberLow = (habitatScore?.factors?.septemberGap?.score ?? 100) < 18;
+        return <AutoLayoutGenerator defaultMode={septemberLow ? 'gap-filler' : undefined} />;
       
       case 'planner':
         return <GardenLayoutPlanner />;
