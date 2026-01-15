@@ -1,0 +1,23 @@
+WILDLIFE DATA COLLECTION STATUS
+================================
+Updated: 2026-01-15
+
+COMPLETED:
+[x] iNaturalist full - 311k obs (109MB)
+[x] Movebank regional - 168k GPS points (72MB)
+[x] Monarchs - 1.3k obs
+[x] Pollinator plants - 2.4k obs  
+[x] Weather (Open-Meteo) - 6 years, 5 stations
+[x] eBird hotspots - 2,703 locations
+
+IN PROGRESS (background):
+[ ] iNat expanded - 89/1056 chunks (~8%) - ETA 6-8hrs
+[ ] eBird observations - 1148/2703 hotspots (~42%) - ETA 2hrs
+
+TODO:
+[ ] Motus - need R package or data request
+[ ] NOAA detailed - need API key
+[ ] Xeno-canto - bird audio
+
+TOTAL COLLECTED: ~500k+ observations
+EXPECTED FINAL: ~1.5M observations

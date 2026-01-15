@@ -1,0 +1,59 @@
+MOVEBANK DATA ACCESS REQUESTS
+=============================
+Date: 2026-01-15
+
+HIGH PRIORITY (Utah-specific):
+1. American Avocet Great Salt Lake (42705082)
+   Contact: John F. Cavitt (jcavitt)
+   Status: [ ] Requested [ ] Approved
+
+2. SLC Airport Raptor re-location (317134988)
+   Contact: Candace Deavila (slctelemetry)
+   Status: [ ] Requested [ ] Approved
+
+3. ICARUS HawkWatch International (1700206712)
+   Contact: HWI LTMCS
+   Status: [ ] Requested [ ] Approved
+
+MEDIUM PRIORITY (Regional):
+4. Long-billed Curlew Western Wyoming (1377708730)
+   Contact: Walter Wehtje
+   Status: [ ] Requested [ ] Approved
+
+5. Teton Kestrel Project (1030730514)
+   Contact: Ross Crandall (rcran910)
+   Status: [ ] Requested [ ] Approved
+
+6. Wyoming Short-eared Owls (1153416521)
+   Contact: Bryan Bedrosian (bbedrosian)
+   Status: [ ] Requested [ ] Approved
+
+7. Teton Rough-legged Hawk (223650899)
+   Contact: Bryan Bedrosian (bbedrosian)
+   Status: [ ] Requested [ ] Approved
+
+8. Golden Eagles USFWS (240931758)
+   Contact: Brian W Smith (bwsmith533)
+   Status: [ ] Requested [ ] Approved
+
+REQUEST TEMPLATE:
+-----------------
+Subject: Data Access Request - Utah Pollinator Conservation Project
+
+Dear [Name],
+
+I am working on an open-source conservation project mapping wildlife 
+corridors and pollinator habitat across Utah (Rainbow Road / Utah Pollinator Path).
+
+Your [study name] dataset would greatly enhance our understanding of 
+wildlife movement patterns in the region. The data will be used for:
+- Habitat connectivity analysis
+- Conservation prioritization
+- Public education tools
+
+Project: https://github.com/Marcus-Pengue/utah-pollinator-path
+
+Would you be willing to grant access for research purposes?
+
+Thank you,
+Marcus Pengue

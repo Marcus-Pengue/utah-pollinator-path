@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Expanded collection - gets ALL Utah observations including:
-- All taxa (not just the main 8)
-- Both research_grade and needs_id quality
-- Casual observations
+Expanded Utah Wildlife Collector - Research Grade
+Chunks by year+month, resumable, matches existing GeoJSON structure.
+Run: nohup caffeinate -i python3 collect_expanded.py &
 """
 
 import requests
@@ -12,232 +11,211 @@ import time
 import os
 from datetime import datetime
 
-OUTPUT_DIR = 'data/full_cache_expanded'
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_DIR = "data/expanded_cache"
+PROGRESS_FILE = f"{OUTPUT_DIR}/progress.json"
+RATE_LIMIT = 1.0
+
+BOUNDS = {"swlat": 36.9, "swlng": -114.1, "nelat": 42.0, "nelng": -109.0}
+
+INAT_TAXA = [
+    (47158, "Insecta"), (47126, "Plantae"), (3, "Aves"),
+    (40151, "Mammalia"), (47170, "Fungi"), (47119, "Arachnida"),
+    (26036, "Reptilia"), (20978, "Amphibia"),
+]
+
+YEARS = range(2015, 2026)
+MONTHS = range(1, 13)
+
+def load_progress():
+    if os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE) as f:
+            return json.load(f)
+    return {"completed": [], "features": []}
+
+def save_progress(progress):
+    with open(PROGRESS_FILE, "w") as f:
+        json.dump(progress, f)
 
 def log(msg):
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] {msg}")
-    with open(f'{OUTPUT_DIR}/collection.log', 'a') as f:
-        f.write(f"[{timestamp}] {msg}\n")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] {msg}")
+    with open(f"{OUTPUT_DIR}/collection.log", "a") as f:
+        f.write(f"[{ts}] {msg}\n")
 
-# Utah bounding box
-UTAH_BOUNDS = {
-    'swlat': 36.9979,
-    'swlng': -114.0529,
-    'nelat': 42.0013,
-    'nelng': -109.0410
-}
-
-def collect_inaturalist_all():
-    """Collect ALL iNaturalist observations for Utah"""
-    log("=== Collecting ALL iNaturalist Utah observations ===")
+def parse_observation(o):
+    """Convert iNat observation to GeoJSON feature with research fields"""
+    coords = o.get("geojson", {}).get("coordinates", [None, None])
+    if not coords[0] or not coords[1]:
+        return None
     
-    all_obs = []
+    taxon = o.get("taxon") or {}
+    observed = o.get("observed_on") or ""
+    
+    # Parse date parts
+    year, month, day = None, None, None
+    if observed:
+        parts = observed.split("-")
+        year = int(parts[0]) if len(parts) > 0 else None
+        month = int(parts[1]) if len(parts) > 1 else None
+        day = int(parts[2]) if len(parts) > 2 else None
+    
+    # Get photo
+    photos = o.get("photos") or []
+    photo_url = photos[0]["url"].replace("square", "medium") if photos else None
+    
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": coords},
+        "properties": {
+            # IDs
+            "id": o.get("id"),
+            "uuid": o.get("uuid"),
+            "source": "inaturalist",
+            
+            # Taxonomy (expanded)
+            "species": taxon.get("preferred_common_name"),
+            "scientific_name": taxon.get("name"),
+            "taxon_id": taxon.get("id"),
+            "taxon_rank": taxon.get("rank"),
+            "iconic_taxon": taxon.get("iconic_taxon_name"),
+            "family": taxon.get("family"),
+            "genus": taxon.get("genus"),
+            "kingdom": taxon.get("kingdom"),
+            "phylum": taxon.get("phylum"),
+            "class": taxon.get("class"),
+            "order": taxon.get("order"),
+            
+            # Time (expanded for phenology)
+            "observed_on": observed,
+            "year": year,
+            "month": month,
+            "day": day,
+            "time_observed": o.get("time_observed_at"),
+            "created_at": o.get("created_at"),
+            
+            # Location
+            "place_guess": o.get("place_guess"),
+            "positional_accuracy": o.get("positional_accuracy"),
+            
+            # Data quality
+            "quality_grade": o.get("quality_grade"),
+            "num_id_agreements": o.get("num_identification_agreements"),
+            "num_id_disagreements": o.get("num_identification_disagreements"),
+            
+            # Observer (for bias analysis)
+            "user_id": o.get("user", {}).get("id"),
+            "user_login": o.get("user", {}).get("login"),
+            "user_observations_count": o.get("user", {}).get("observations_count"),
+            
+            # Media
+            "photo_url": photo_url,
+            "photos_count": len(photos),
+        }
+    }
+
+def fetch_chunk(taxon_id, year, month):
+    """Fetch all observations for taxon/year/month"""
+    features = []
     page = 1
-    per_page = 200
+    d1 = f"{year}-{month:02d}-01"
+    d2 = f"{year}-{month+1:02d}-01" if month < 12 else f"{year+1}-01-01"
     
-    # Get total count first
-    params = {
-        **UTAH_BOUNDS,
-        'per_page': 1,
-        'page': 1,
-    }
-    
-    r = requests.get('https://api.inaturalist.org/v1/observations', params=params, timeout=30)
-    total = r.json().get('total_results', 0)
-    log(f"Total iNaturalist observations in Utah: {total:,}")
-    
-    # iNaturalist has a 10,000 result limit per query
-    # We need to paginate by date or other criteria
-    
-    # Collect by year to avoid the 10k limit
-    years = range(2000, 2026)
-    
-    for year in years:
-        log(f"\nCollecting year {year}...")
-        year_obs = []
-        page = 1
-        
-        while True:
-            params = {
-                **UTAH_BOUNDS,
-                'per_page': per_page,
-                'page': page,
-                'd1': f'{year}-01-01',
-                'd2': f'{year}-12-31',
-                'order': 'asc',
-                'order_by': 'observed_on',
-            }
-            
-            try:
-                r = requests.get('https://api.inaturalist.org/v1/observations', params=params, timeout=60)
-                data = r.json()
-                results = data.get('results', [])
-                
-                if not results:
-                    break
-                
-                for obs in results:
-                    if obs.get('location'):
-                        lat, lng = map(float, obs['location'].split(','))
-                        year_obs.append({
-                            'type': 'Feature',
-                            'geometry': {'type': 'Point', 'coordinates': [lng, lat]},
-                            'properties': {
-                                'id': f"inat_{obs['id']}",
-                                'species': obs.get('taxon', {}).get('name', ''),
-                                'common_name': obs.get('taxon', {}).get('preferred_common_name', ''),
-                                'iconic_taxon': obs.get('taxon', {}).get('iconic_taxon_name', ''),
-                                'year': int(obs.get('observed_on', '')[:4]) if obs.get('observed_on') else None,
-                                'month': int(obs.get('observed_on', '')[5:7]) if obs.get('observed_on') and len(obs.get('observed_on', '')) >= 7 else None,
-                                'quality': obs.get('quality_grade', ''),
-                                'source': 'iNaturalist'
-                            }
-                        })
-                
-                log(f"  {year} page {page}: {len(results)} obs (total: {len(year_obs):,})")
-                
-                if len(results) < per_page:
-                    break
-                    
-                page += 1
-                time.sleep(1)  # Rate limit
-                
-                # Stop at 10k per year (API limit)
-                if page > 50:
-                    log(f"  Reached page limit for {year}")
-                    break
-                    
-            except Exception as e:
-                log(f"  Error: {e}")
-                time.sleep(5)
-                continue
-        
-        all_obs.extend(year_obs)
-        log(f"  Year {year} complete: {len(year_obs):,} observations")
-        
-        # Save checkpoint
-        checkpoint = {'features': all_obs, 'year': year}
-        with open(f'{OUTPUT_DIR}/checkpoint_inat.json', 'w') as f:
-            json.dump(checkpoint, f)
-    
-    return all_obs
-
-def collect_gbif_all():
-    """Collect ALL GBIF observations for Utah"""
-    log("\n=== Collecting ALL GBIF Utah observations ===")
-    
-    all_obs = []
-    offset = 0
-    limit = 300
-    
-    # GBIF query for Utah
-    params = {
-        'decimalLatitude': '36.99,42.01',
-        'decimalLongitude': '-114.06,-109.04',
-        'hasCoordinate': 'true',
-        'limit': limit,
-        'offset': offset,
-    }
-    
-    # Get total
-    r = requests.get('https://api.gbif.org/v1/occurrence/search', params={**params, 'limit': 1}, timeout=30)
-    total = r.json().get('count', 0)
-    log(f"Total GBIF observations in Utah: {total:,}")
-    
-    while offset < min(total, 200000):  # GBIF has 200k limit
-        params['offset'] = offset
-        
+    while page <= 50:
+        params = {
+            "taxon_id": taxon_id, "d1": d1, "d2": d2,
+            "swlat": BOUNDS["swlat"], "swlng": BOUNDS["swlng"],
+            "nelat": BOUNDS["nelat"], "nelng": BOUNDS["nelng"],
+            "quality_grade": "research,needs_id",
+            "per_page": 200, "page": page
+        }
         try:
-            r = requests.get('https://api.gbif.org/v1/occurrence/search', params=params, timeout=60)
-            data = r.json()
-            results = data.get('results', [])
-            
+            r = requests.get("https://api.inaturalist.org/v1/observations", 
+                           params=params, timeout=30)
+            r.raise_for_status()
+            results = r.json().get("results", [])
             if not results:
                 break
-            
-            for obs in results:
-                if obs.get('decimalLatitude') and obs.get('decimalLongitude'):
-                    all_obs.append({
-                        'type': 'Feature',
-                        'geometry': {
-                            'type': 'Point',
-                            'coordinates': [obs['decimalLongitude'], obs['decimalLatitude']]
-                        },
-                        'properties': {
-                            'id': f"gbif_{obs.get('gbifID', obs.get('key', ''))}",
-                            'species': obs.get('species', obs.get('scientificName', '')),
-                            'common_name': obs.get('vernacularName', ''),
-                            'iconic_taxon': obs.get('class', obs.get('phylum', '')),
-                            'year': obs.get('year'),
-                            'month': obs.get('month'),
-                            'source': 'GBIF'
-                        }
-                    })
-            
-            log(f"  Offset {offset:,}: {len(results)} obs (total: {len(all_obs):,})")
-            offset += limit
-            time.sleep(0.5)
-            
-            # Checkpoint every 10k
-            if len(all_obs) % 10000 < limit:
-                with open(f'{OUTPUT_DIR}/checkpoint_gbif.json', 'w') as f:
-                    json.dump({'features': all_obs}, f)
-                    
+            for o in results:
+                feat = parse_observation(o)
+                if feat:
+                    features.append(feat)
+            page += 1
+            time.sleep(RATE_LIMIT)
         except Exception as e:
-            log(f"  Error at offset {offset}: {e}")
+            log(f"  Error page {page}: {e}")
             time.sleep(5)
-            continue
-    
-    return all_obs
+            break
+    return features
 
 def main():
-    log("=" * 60)
-    log("EXPANDED COLLECTION - ALL UTAH OBSERVATIONS")
-    log("=" * 60)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    progress = load_progress()
     
-    # Collect from both sources
-    inat_obs = collect_inaturalist_all()
-    gbif_obs = collect_gbif_all()
+    log("="*60)
+    log("EXPANDED COLLECTION - RESUMABLE")
+    log(f"Existing features: {len(progress['features']):,}")
+    log(f"Completed chunks: {len(progress['completed'])}")
+    log("="*60)
     
-    # Combine and deduplicate
-    log("\n--- Combining and deduplicating ---")
-    all_obs = inat_obs + gbif_obs
-    log(f"Before dedup: {len(all_obs):,}")
+    total_chunks = len(INAT_TAXA) * len(YEARS) * len(MONTHS)
     
-    # Deduplicate by location + year
+    for taxon_id, taxon_name in INAT_TAXA:
+        for year in YEARS:
+            for month in MONTHS:
+                key = f"{taxon_id}_{year}_{month}"
+                if key in progress["completed"]:
+                    continue
+                
+                log(f"{taxon_name} {year}-{month:02d} ({len(progress['completed'])}/{total_chunks})")
+                features = fetch_chunk(taxon_id, year, month)
+                progress["features"].extend(features)
+                progress["completed"].append(key)
+                save_progress(progress)
+                
+                if features:
+                    log(f"  +{len(features)} (total: {len(progress['features']):,})")
+    
+    # Final export
+    log("\nBuilding final GeoJSON...")
+    
+    # Deduplicate
     seen = set()
     unique = []
-    for obs in all_obs:
-        coords = obs['geometry']['coordinates']
-        props = obs['properties']
-        key = (round(coords[0], 4), round(coords[1], 4), props.get('year'), props.get('species', '')[:20])
-        if key not in seen:
-            seen.add(key)
-            unique.append(obs)
+    for f in progress["features"]:
+        k = f["properties"]["id"]
+        if k not in seen:
+            seen.add(k)
+            unique.append(f)
     
-    log(f"After dedup: {len(unique):,}")
+    # Build stats
+    taxon_dist = {}
+    year_dist = {}
+    for f in unique:
+        t = f["properties"].get("iconic_taxon") or "Other"
+        y = f["properties"].get("year")
+        taxon_dist[t] = taxon_dist.get(t, 0) + 1
+        if y:
+            year_dist[y] = year_dist.get(y, 0) + 1
     
-    # Save final output
     output = {
-        'type': 'FeatureCollection',
-        'generated': datetime.now().isoformat(),
-        'features': unique
+        "type": "FeatureCollection",
+        "generated": datetime.now().isoformat(),
+        "total_observations": len(unique),
+        "taxon_distribution": dict(sorted(taxon_dist.items(), key=lambda x: -x[1])),
+        "year_distribution": dict(sorted(year_dist.items())),
+        "features": unique
     }
     
-    output_path = f'{OUTPUT_DIR}/utah_expanded_cache.json'
-    with open(output_path, 'w') as f:
+    outpath = f"{OUTPUT_DIR}/utah_expanded.json"
+    with open(outpath, "w") as f:
         json.dump(output, f)
     
-    size_mb = os.path.getsize(output_path) / (1024*1024)
+    size_mb = os.path.getsize(outpath) / (1024*1024)
     
-    log("\n" + "=" * 60)
-    log(f"COLLECTION COMPLETE")
-    log(f"Total observations: {len(unique):,}")
-    log(f"File size: {size_mb:.1f} MB")
-    log(f"Output: {output_path}")
-    log("=" * 60)
+    log("="*60)
+    log(f"COMPLETE: {len(unique):,} observations")
+    log(f"File: {outpath} ({size_mb:.1f} MB)")
+    log("="*60)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
