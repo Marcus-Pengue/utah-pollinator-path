@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Mushroom Observer - Fungi observations
+Uses location bounding box center when no exact coords
 """
 
 import requests
@@ -43,6 +44,21 @@ def main():
         for rec in results:
             lat = rec.get("latitude")
             lng = rec.get("longitude")
+            
+            # If no exact coords, use location bbox center
+            if not lat or not lng:
+                loc = rec.get("location", {})
+                if isinstance(loc, dict):
+                    try:
+                        lat_n = float(loc.get("latitude_north", 0))
+                        lat_s = float(loc.get("latitude_south", 0))
+                        lng_e = float(loc.get("longitude_east", 0))
+                        lng_w = float(loc.get("longitude_west", 0))
+                        if lat_n and lat_s and lng_e and lng_w:
+                            lat = (lat_n + lat_s) / 2
+                            lng = (lng_e + lng_w) / 2
+                    except:
+                        pass
             
             if not lat or not lng:
                 continue
